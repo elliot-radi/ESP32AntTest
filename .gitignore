@@ -1,0 +1,24 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig.old
+*.bin
+*.elf
+*.map
+
+# IDF component manager
+managed_components/
+dependencies.lock
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs captured from serial (optional to exclude)
+tools/logs/*.csv
