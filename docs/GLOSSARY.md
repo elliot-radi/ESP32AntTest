@@ -14,7 +14,7 @@ A per-board header file (`board_config.h`) containing GPIO pin assignments and h
 A rapid sequence of N ping-pong exchanges triggered by a single button press in Manual Mode. Default N = 10. Results are averaged or logged individually within one Run.
 
 **C3 Board**  
-The ESP32-C3 development module. RISC-V single-core, 2.4 GHz only, sufficient GPIO for OLED + button. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).
+The ESP32-C3 development module. RISC-V single-core, 2.4 GHz only, ceramic PCB antenna (onboard), sufficient GPIO for OLED + button. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).
 
 **Double Press**  
 A button gesture: two short presses within 400 ms. Used as Back / Cancel in the UI.
@@ -86,4 +86,4 @@ A test scenario in which the two boards are placed at a fixed location and Auto 
 Transmit power of the WiFi/ESP-NOW radio, set via `esp_wifi_set_max_tx_power()`. Expressed in dBm. User-selectable from the Mobile menu: 2, 10, 17, or 20 dBm. Both boards' TX power values are included in every logged record.
 
 **WROOM Board**  
-The ESP32-WROOM-32 development module. Dual-core Xtensa, PCB trace antenna, USB-serial for logging. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).
+The ESP32-WROOM-32 development module. Dual-core Xtensa, FPC antenna adhered to the PCB, USB-serial for logging. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).

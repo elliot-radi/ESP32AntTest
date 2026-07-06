@@ -11,7 +11,7 @@ ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + butt
 | Item | Notes |
 |------|-------|
 | Chip | ESP32-C3, RISC-V single-core, 2.4 GHz |
-| Antenna | PCB trace (integral) |
+| Antenna | Ceramic PCB antenna (onboard) |
 | USB | USB-C for power and serial |
 
 ### ESP32-WROOM-32 Dev Module
@@ -19,7 +19,7 @@ ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + butt
 | Item | Notes |
 |------|-------|
 | Chip | ESP32-WROOM-32, dual-core Xtensa, 2.4 GHz |
-| Antenna | PCB trace (integral) |
+| Antenna | FPC antenna (adhered to PCB) |
 | USB | Micro-USB for power and serial (38-pin or 30-pin variant) |
 
 ---
@@ -111,7 +111,8 @@ The following antenna types are candidates for substitution during testing sessi
 
 | Type | Notes |
 |------|-------|
-| PCB trace (integral) | Default on WROOM and C3 modules |
+| Ceramic PCB antenna | Default on the ESP32-C3 dev module (onboard chip antenna) |
+| FPC antenna | Default on the ESP32-WROOM-32 dev module (adhered to the PCB) |
 | Quarter-wave monopole | ~31 mm wire at 2.4 GHz; attach to U.FL or SMA connector |
 | External dipole | Via U.FL pigtail + SMA; requires board with U.FL connector |
 | Rubber duck (2.4 GHz) | Standard 2 dBi whip; via SMA adapter |

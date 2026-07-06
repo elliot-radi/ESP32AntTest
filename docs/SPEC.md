@@ -12,7 +12,7 @@ ESP32AntTest is a portable, self-contained RF link characterization instrument. 
 
 The primary use cases are:
 
-- Comparing antenna types (e.g. PCB trace vs. quarter-wave monopole)
+- Comparing antenna types (e.g. ceramic PCB vs. FPC vs. quarter-wave monopole)
 - Evaluating antenna orientations at fixed distance
 - Mapping link quality vs. physical distance (range walk)
 - Observing signal variation over time under real-world interference (time soak)
