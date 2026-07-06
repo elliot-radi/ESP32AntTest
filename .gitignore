@@ -12,6 +12,11 @@ dependencies.lock
 # macOS
 .DS_Store
 
+# Editor-generated backups
+*.backup
+*.bak
+*~
+
 # VSCode
 .vscode/
 
