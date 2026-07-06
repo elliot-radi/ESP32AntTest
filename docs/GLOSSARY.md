@@ -13,8 +13,8 @@ A per-board header file (`board_config.h`) containing GPIO pin assignments and h
 **Burst**  
 A rapid sequence of N ping-pong exchanges triggered by a single button press in Manual Mode. Default N = 10. Results are averaged or logged individually within one Run.
 
-**C3 / Mobile Board**  
-The ESP32-C3 development module, default hardware for the Mobile role. RISC-V single-core, 2.4 GHz only, sufficient GPIO for OLED + button.
+**C3 Board**  
+The ESP32-C3 development module. RISC-V single-core, 2.4 GHz only, sufficient GPIO for OLED + button. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).
 
 **Double Press**  
 A button gesture: two short presses within 400 ms. Used as Back / Cancel in the UI.
@@ -32,7 +32,7 @@ A button gesture: button held ≥ 1500 ms. Used as Select / Confirm in the UI.
 A test mode in which each button press triggers one Burst. Used for range-walk scenarios where the user moves the Mobile and captures data at each stop.
 
 **Mobile**  
-The handheld board. Runs the OLED display, button UI, and session control logic. Initiates all ping exchanges. Default hardware: ESP32-C3.
+The handheld board. Runs the OLED display, button UI, and session control logic. Initiates all ping exchanges. Default hardware: ESP32-WROOM-32 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
 
 **Mode A — WiFi Peer**  
 RF mode where Station acts as SoftAP and Mobile connects as STA. No external router. RSSI obtained via native ESP-IDF WiFi API on both sides.
@@ -74,7 +74,7 @@ A button gesture: button pressed and released in < 500 ms. Used for Scroll / Nex
 Software Access Point. One board acts as an access point in firmware. In Mode A, Station is the SoftAP; Mobile connects to it as a WiFi client (STA). No wired uplink is needed.
 
 **Station**  
-The stationary board. Responds to pings, measures uplink RSSI, logs data to LittleFS and serial. Default hardware: ESP32-WROOM-32.
+The stationary board. Responds to pings, measures uplink RSSI, logs data to LittleFS and serial. Default hardware: ESP32-C3 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
 
 **STA (WiFi Station mode)**  
 Standard WiFi client mode. In Mode A, Mobile is the STA, connecting to Station's SoftAP.
@@ -85,5 +85,5 @@ A test scenario in which the two boards are placed at a fixed location and Auto 
 **TX Power**  
 Transmit power of the WiFi/ESP-NOW radio, set via `esp_wifi_set_max_tx_power()`. Expressed in dBm. User-selectable from the Mobile menu: 2, 10, 17, or 20 dBm. Both boards' TX power values are included in every logged record.
 
-**WROOM / Station Board**  
-The ESP32-WROOM-32 development module, default hardware for the Station role. Dual-core Xtensa, PCB trace antenna, USB-serial for logging.
+**WROOM Board**  
+The ESP32-WROOM-32 development module. Dual-core Xtensa, PCB trace antenna, USB-serial for logging. Can fill either role (see Configurations in [HARDWARE.md](HARDWARE.md)).

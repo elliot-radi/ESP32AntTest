@@ -1,29 +1,69 @@
 # ESP32AntTest — Hardware Guide
 
-## Mobile Unit (ESP32-C3 Dev Module)
+ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + button, battery) and **Station** role (USB-serial logging, LittleFS) are decoupled from the physical board — either the ESP32-C3 or the ESP32-WROOM-32 can fill either role. The assignment is a compile-time choice; see [Configurations](#configurations) below.
 
-### Components
+---
+
+## Boards
+
+### ESP32-C3 Dev Module
 
 | Item | Notes |
 |------|-------|
-| ESP32-C3 dev board | Any standard C3 dev module with USB-C |
-| SSD1306 OLED 0.96" | 128×64, I2C variant (4-pin: VCC, GND, SCL, SDA) |
-| Tactile push button | Momentary NO, any standard 6mm PCB type |
-| 10 kΩ resistor | Pull-up for button (or use internal pull-up in firmware) |
-| 0.1 µF capacitor | Button debounce (optional if using software debounce) |
-| LiPo battery + regulator | 3.7V LiPo with 3.3V LDO, or USB power bank |
+| Chip | ESP32-C3, RISC-V single-core, 2.4 GHz |
+| Antenna | PCB trace (integral) |
+| USB | USB-C for power and serial |
 
-### Pin Assignments (default)
+### ESP32-WROOM-32 Dev Module
 
-| Signal | GPIO | Notes |
-|--------|------|-------|
-| OLED SDA | 8 | I2C data |
-| OLED SCL | 9 | I2C clock |
-| Button | 5 | Active-low; internal pull-up enabled in firmware |
+| Item | Notes |
+|------|-------|
+| Chip | ESP32-WROOM-32, dual-core Xtensa, 2.4 GHz |
+| Antenna | PCB trace (integral) |
+| USB | Micro-USB for power and serial (38-pin or 30-pin variant) |
 
-> **Note:** Confirm I2C address of your OLED module. Most 0.96" SSD1306 modules use `0x3C`. Some use `0x3D`. Run an I2C scanner sketch to verify before first flash.
+---
 
-### Wiring Diagram (text)
+## Mobile Peripherals
+
+The Mobile board carries the user interface regardless of which dev module it is.
+
+| Peripheral | Type | Interface |
+|-----------|------|-----------|
+| Display | 0.96" SSD1306 OLED, 128×64 px | I2C |
+| Input | Single tactile push-button | GPIO, active-low, internal pull-up |
+| Power | LiPo battery + regulator (user-supplied) | — |
+
+### Pin Assignments by Board
+
+Pin assignments are keyed to the **board**, not the role, so they remain valid in either configuration. The authoritative source is each firmware directory's `board_config.h`; the values in `shared/config.h` are fallback defaults.
+
+| Signal | ESP32-C3 | ESP32-WROOM-32 | Notes |
+|--------|----------|----------------|-------|
+| OLED SDA | GPIO 8 | GPIO 21 | I2C data |
+| OLED SCL | GPIO 9 | GPIO 22 | I2C clock |
+| Button | GPIO 5 | GPIO 17 | Active-low; internal pull-up. (GPIO 0 avoided on WROOM — strapping pin.) |
+
+> **Note:** Confirm the I2C address of your OLED module. Most 0.96" SSD1306 modules use `0x3C`; some use `0x3D`. Run an I2C scanner sketch to verify before first flash.
+
+### Wiring Diagram — ESP32-WROOM-32 as Mobile
+
+```
+ESP32-WROOM-32 Dev Board
+┌─────────────────────────────┐
+│  3V3 ──────────────────────►│VCC   SSD1306 OLED
+│  GND ──────────────────────►│GND
+│  GPIO21 ───────────────────►│SDA
+│  GPIO22 ───────────────────►│SCL
+│                             └───────────────────
+│
+│  3V3 ───┬── 10kΩ ──┐
+│         │          │
+│  GPIO17 ─┘     [BUTTON] ── GND
+└─────────────────────────────┘
+```
+
+### Wiring Diagram — ESP32-C3 as Mobile
 
 ```
 ESP32-C3 Dev Board
@@ -40,22 +80,32 @@ ESP32-C3 Dev Board
 └─────────────────────────────┘
 ```
 
-For software debounce only (no RC filter), simply wire button between GPIO5 and GND. Internal pull-up is enabled via `gpio_set_pull_mode(ANT_BUTTON_PIN, GPIO_PULLUP_ONLY)`.
+For software debounce only (no RC filter), simply wire the button between the chosen GPIO and GND. Internal pull-up is enabled via `gpio_set_pull_mode(ANT_BUTTON_PIN, GPIO_PULLUP_ONLY)`.
 
 ---
 
-## Station Unit (ESP32-WROOM-32 Dev Module)
+## Station Peripherals
 
-### Components
+The Station board requires no external peripherals — only a USB cable for power and serial logging. LittleFS session logs are stored in onboard flash.
 
-| Item | Notes |
-|------|-------|
-| ESP32-WROOM-32 dev board | Standard 38-pin or 30-pin variant |
-| USB cable | For power and serial logging to PC |
+---
 
-No additional peripherals required. All output is via USB-serial.
+## Configurations
 
-### Antenna Options for Testing
+Two role-to-board assignments are supported. The choice is made at compile time via the `ROLE_MOBILE` / `ROLE_STATION` flag in `shared/config.h` (see [SPEC §2.1](SPEC.md)) and the `idf.py set-target` called in each firmware directory.
+
+| Config | Mobile board | Station board | Mobile pins (SDA / SCL / Button) |
+|--------|-------------|---------------|----------------------------------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 | 21 / 22 / 17 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 | 8 / 9 / 5 |
+
+Both configurations are functionally equivalent — the RF behavior (Station as SoftAP, Mobile as STA in Mode A; symmetric ESP-NOW peers in Mode B) is role-based, not chip-based.
+
+To switch the default from A to B (or vice versa), only the labels above and the `set-target` calls change; the pin maps stay board-keyed.
+
+---
+
+## Antenna Options for Testing
 
 The following antenna types are candidates for substitution during testing sessions. Document which antenna is installed at the start of each session.
 
@@ -68,32 +118,29 @@ The following antenna types are candidates for substitution during testing sessi
 
 ---
 
-## Changing Target Board
+## Changing Target Board / Configuration
 
-To use a different board variant, edit `board_config.h` in the appropriate firmware directory:
+To switch configurations or substitute a different board variant, edit `board_config.h` in the appropriate firmware directory:
 
 ```c
 // firmware/mobile/main/board_config.h
-#define ANT_OLED_SDA_PIN    8    // adjust for your board
-#define ANT_OLED_SCL_PIN    9
-#define ANT_BUTTON_PIN      5
+#define ANT_OLED_SDA_PIN    21   // WROOM default; use 8 for C3
+#define ANT_OLED_SCL_PIN    22   // WROOM default; use 9 for C3
+#define ANT_BUTTON_PIN      17   // WROOM default; use 5 for C3
 ```
 
-Then re-run `idf.py set-target <target>` and `idf.py build`.
-
-Common alternate pin assignments:
-
-| Board | SDA | SCL | Button |
-|-------|-----|-----|--------|
-| ESP32-C3 (default) | 8 | 9 | 5 |
-| ESP32-WROOM-32 | 21 | 22 | 0 |
-| ESP32-S3 | 8 | 9 | 0 |
+Then re-run `idf.py set-target <target>` and `idf.py build`. Use `esp32` for the WROOM-32, `esp32c3` for the C3.
 
 ---
 
 ## Power Considerations for Mobile
 
-- At 20 dBm TX power, ESP32-C3 draws ~300–400 mA peak during transmit bursts
-- A 1000 mAh LiPo provides roughly 2–3 hours of active testing
+Approximate current draw at 20 dBm TX power:
+
+| Board | Peak TX current | Runtime on 1000 mAh LiPo (active) |
+|-------|----------------|----------------------------------|
+| ESP32-C3 | ~300–400 mA | ~2–3 hours |
+| ESP32-WROOM-32 | ~500 mA+ | ~1.5–2 hours |
+
 - The firmware does not currently implement sleep modes between bursts (future enhancement)
-- Do not power the C3 from a USB power bank that auto-shuts off below a load threshold — add a small bleed resistor or keep the serial monitor open
+- Do not power the Mobile from a USB power bank that auto-shuts off below a load threshold — add a small bleed resistor or keep the serial monitor open

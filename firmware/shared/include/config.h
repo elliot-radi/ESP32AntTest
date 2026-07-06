@@ -29,15 +29,17 @@
 #define ANT_BTN_DOUBLE_GAP_MS   400
 #define ANT_BTN_DEBOUNCE_MS     20
 
-// OLED — override in board_config.h
+// OLED + button — Mobile-side pins. Override in board_config.h.
+// Defaults below are for ESP32-WROOM-32 as Mobile (Config A).
+// For ESP32-C3 as Mobile (Config B): SDA=8, SCL=9, Button=5.
 #ifndef ANT_OLED_SDA_PIN
-#define ANT_OLED_SDA_PIN        8
+#define ANT_OLED_SDA_PIN        21
 #endif
 #ifndef ANT_OLED_SCL_PIN
-#define ANT_OLED_SCL_PIN        9
+#define ANT_OLED_SCL_PIN        22
 #endif
 #ifndef ANT_BUTTON_PIN
-#define ANT_BUTTON_PIN          5
+#define ANT_BUTTON_PIN          17
 #endif
 
 // LittleFS

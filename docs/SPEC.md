@@ -31,12 +31,14 @@ The primary use cases are:
 
 ### 2.1 Roles
 
-| Role | Default Board | Alternate Boards Supported |
-|------|--------------|---------------------------|
-| Mobile | ESP32-C3 dev module | ESP32-S3, ESP32-WROOM-32 |
-| Station | ESP32-WROOM-32 dev module | ESP32-S3, ESP32-C3 |
+The Mobile and Station roles are decoupled from the physical board — either the ESP32-C3 or the ESP32-WROOM-32 can fill either role. The assignment is a compile-time choice:
 
-Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#define ROLE_STATION` flag in `shared/config.h`, making the firmware portable across board variants. Board-specific GPIO pin assignments are isolated in `mobile/board_config.h` and `station/board_config.h`.
+| Config | Mobile | Station |
+|--------|--------|---------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 |
+
+Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#define ROLE_STATION` flag in `shared/config.h`, making the firmware portable across board variants. Board-specific GPIO pin assignments are isolated in `mobile/board_config.h` and `station/board_config.h` (see [HARDWARE.md](HARDWARE.md) for both boards' pin maps).
 
 ### 2.2 Mobile Peripherals
 
@@ -46,8 +48,15 @@ Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#de
 | Input | Single tactile push-button | GPIO, active-low, internal pull-up |
 | Power | LiPo battery + regulator (user-supplied) | — |
 
-**Default I2C pins (ESP32-C3):** SDA = GPIO 8, SCL = GPIO 9  
-**Button pin (ESP32-C3):** GPIO 5 (configurable in `board_config.h`)
+Default Mobile pins by board (configurable in `board_config.h`):
+
+| Signal | ESP32-C3 | ESP32-WROOM-32 |
+|--------|----------|----------------|
+| OLED SDA | GPIO 8 | GPIO 21 |
+| OLED SCL | GPIO 9 | GPIO 22 |
+| Button | GPIO 5 | GPIO 17 |
+
+(GPIO 0 is avoided as the button pin on the WROOM-32 because it is a strapping pin.)
 
 ### 2.3 Station Peripherals
 
@@ -226,9 +235,9 @@ Station replies with `PKT_PONG` with its locally-measured Mobile RSSI and its TX
 #define ANT_PING_TIMEOUT_MS    2000
 #define ANT_LOSS_THRESHOLD     5        // consecutive timeouts = link lost
 #define ANT_DEFAULT_TX_POWER   17       // dBm
-#define ANT_OLED_SDA_PIN       8        // C3 default
-#define ANT_OLED_SCL_PIN       9        // C3 default
-#define ANT_BUTTON_PIN         5        // C3 default
+#define ANT_OLED_SDA_PIN       21       // WROOM default (C3: 8) — see board_config.h
+#define ANT_OLED_SCL_PIN       22       // WROOM default (C3: 9)
+#define ANT_BUTTON_PIN         17       // WROOM default (C3: 5)
 #define ANT_BTN_SHORT_MAX_MS   500
 #define ANT_BTN_LONG_MIN_MS    1500
 #define ANT_BTN_DOUBLE_GAP_MS  400
@@ -242,13 +251,13 @@ Station replies with `PKT_PONG` with its locally-measured Mobile RSSI and its TX
 
 - ESP-IDF v5.2 or later
 - `idf.py` in PATH
-- Targets: `esp32` (Station), `esp32c3` (Mobile default)
+- Targets: `esp32` and `esp32c3` (role-to-board mapping is configurable; see §2.1)
 
 ### Build Mobile
 
 ```bash
 cd firmware/mobile
-idf.py set-target esp32c3
+idf.py set-target esp32        # Config A (WROOM); use esp32c3 for Config B
 idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
@@ -257,7 +266,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 ```bash
 cd firmware/station
-idf.py set-target esp32
+idf.py set-target esp32c3      # Config A (C3); use esp32 for Config B
 idf.py build
 idf.py -p /dev/ttyUSB1 flash monitor
 ```

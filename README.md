@@ -8,10 +8,17 @@ Test and compare antenna types, orientations, and transmit power settings betwee
 
 ## Hardware
 
-| Role | Default Board | Display | Power |
-|------|--------------|---------|-------|
-| **Mobile** | ESP32-C3 dev module | 0.96" SSD1306 OLED (I2C) | Battery |
-| **Station** | ESP32-WROOM-32 dev module | None | USB (serial logging) |
+Two ESP32 dev boards (an ESP32-C3 and an ESP32-WROOM-32) fill the Mobile and Station roles. The role-to-board mapping is a compile-time choice — either board can fill either role (see [docs/HARDWARE.md](docs/HARDWARE.md)):
+
+| Config | Mobile | Station |
+|--------|--------|---------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 |
+
+| Role | Peripherals | Power |
+|------|-------------|-------|
+| **Mobile** | 0.96" SSD1306 OLED (I2C) + tactile button | Battery |
+| **Station** | None (USB-serial logging + LittleFS) | USB |
 
 ## Quick Start
 
@@ -20,8 +27,8 @@ See [docs/HARDWARE.md](docs/HARDWARE.md) for wiring diagrams and pin assignments
 
 ```
 firmware/
-  mobile/    # C3 firmware — OLED UI, button input, session control
-  station/   # WROOM firmware — data logging, serial output, LittleFS
+  mobile/    # Mobile firmware — OLED UI, button input, session control
+  station/   # Station firmware — data logging, serial output, LittleFS
   shared/    # Common packet structs, protocol constants
 docs/
   SPEC.md
