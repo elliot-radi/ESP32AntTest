@@ -32,7 +32,7 @@ The Mobile board carries the user interface regardless of which dev module it is
 |-----------|------|-----------|
 | Display | 0.96" SSD1306 OLED, 128×64 px | I2C |
 | Input | Single tactile push-button | GPIO, active-low, internal pull-up |
-| Power | LiPo battery + regulator (user-supplied) | — |
+| Power | USB (power bank or USB charger/cable) | — |
 
 ### Pin Assignments by Board
 
@@ -44,7 +44,7 @@ Pin assignments are keyed to the **board**, not the role, so they remain valid i
 | OLED SCL | GPIO 9 | GPIO 22 | I2C clock |
 | Button | GPIO 5 | GPIO 17 | Active-low; internal pull-up. (GPIO 0 avoided on WROOM — strapping pin.) |
 
-> **Note:** Confirm the I2C address of your OLED module. Most 0.96" SSD1306 modules use `0x3C`; some use `0x3D`. Run an I2C scanner sketch to verify before first flash.
+> **Note:** The OLED modules on hand use I2C address **`0x3C`** (confirmed, set as the default in `shared/config.h` as `ANT_OLED_I2C_ADDR`). Some SSD1306 modules use `0x3D` instead — if you swap in a different module, run an I2C scanner sketch to verify and override `ANT_OLED_I2C_ADDR` in `board_config.h`.
 
  ### Wiring diagram - ESP32-WROOM-32 as Mobile                                           
                                                                  
@@ -153,12 +153,12 @@ Then re-run `idf.py set-target <target>` and `idf.py build`. Use `esp32` for the
 
 ## Power Considerations for Mobile
 
-Approximate current draw at 20 dBm TX power:
+The Mobile is USB-powered (no battery circuit — see [SPEC §9 OI-04](SPEC.md)). Approximate current draw at 20 dBm TX power:
 
-| Board | Peak TX current | Runtime on 1000 mAh LiPo (active) |
-|-------|----------------|----------------------------------|
-| ESP32-C3 | ~300–400 mA | ~2–3 hours |
-| ESP32-WROOM-32 | ~500 mA+ | ~1.5–2 hours |
+| Board | Peak TX current |
+|-------|----------------|
+| ESP32-C3 | ~300–400 mA |
+| ESP32-WROOM-32 | ~500 mA+ |
 
 - The firmware does not currently implement sleep modes between bursts (future enhancement)
 - Do not power the Mobile from a USB power bank that auto-shuts off below a load threshold — add a small bleed resistor or keep the serial monitor open

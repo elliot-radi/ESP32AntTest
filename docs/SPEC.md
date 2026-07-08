@@ -1,8 +1,8 @@
 # ESP32AntTest — System Specification
 
-**Version:** 0.1.0-draft  
+**Version:** 0.2.0-draft  
 **Status:** Pre-implementation  
-**Last Updated:** 2026-07-03
+**Last Updated:** 2026-07-08
 
 ---
 
@@ -46,7 +46,7 @@ Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#de
 |-----------|------|-----------|
 | Display | 0.96" SSD1306 OLED, 128×64 px | I2C |
 | Input | Single tactile push-button | GPIO, active-low, internal pull-up |
-| Power | LiPo battery + regulator (user-supplied) | — |
+| Power | USB (power bank or USB charger/cable) | — |
 
 Default Mobile pins by board (configurable in `board_config.h`):
 
@@ -170,11 +170,13 @@ When navigating menus, rows 1–4 become menu items. Status bar remains visible 
 #### LittleFS log (CSV, one file per session)
 
 ```
-session_id,run_id,seq,timestamp_ms,mode,tx_mob,tx_sta,rssi_mob,rssi_sta,status
-20260703_143022,003,0042,847293,ESPNOW,17,17,-67,-71,OK
+session_id,run_id,seq,timestamp_ms,datetime,mode,tx_mob,tx_sta,rssi_mob,rssi_sta,status
+20260703_143022,003,0042,847293,2026-07-03T14:30:22,ESPNOW,17,17,-67,-71,OK
 ```
 
 `status` values: `OK`, `TIMEOUT`, `ERR_DECODE`
+
+`timestamp_ms` is ms since Station boot (monotonic, used for inter-sample math). `datetime` is the local wall-clock time of the sample (`YYYY-MM-DDTHH:MM:SS`), derived from the Station's time baseline (see [Time Source](#time-source) below). If no wall clock was set at boot, `datetime` is empty for the session and the file is named `UNKNOWN_<bootcounter>.csv`.
 
 ---
 
@@ -185,7 +187,8 @@ session_id,run_id,seq,timestamp_ms,mode,tx_mob,tx_sta,rssi_mob,rssi_sta,status
 | `session_id` | string | `YYYYMMDD_HHMMSS` of session start |
 | `run_id` | uint16 | Incrementing within session |
 | `seq` | uint32 | Packet sequence number within run |
-| `timestamp_ms` | uint64 | ms since Station boot |
+| `timestamp_ms` | uint64 | ms since Station boot (monotonic) |
+| `datetime` | string | Local wall-clock `YYYY-MM-DDTHH:MM:SS` of the sample (empty if no time set at boot) |
 | `mode` | enum | `WIFI` or `ESPNOW` |
 | `tx_mob` | int8 | Mobile TX power (dBm) |
 | `tx_sta` | int8 | Station TX power (dBm) |
@@ -234,7 +237,18 @@ Station replies with `PKT_PONG` with its locally-measured Mobile RSSI and its TX
 #define ANT_AUTO_INTERVAL_MS   5000     // Auto mode sample interval
 #define ANT_PING_TIMEOUT_MS    2000
 #define ANT_LOSS_THRESHOLD     5        // consecutive timeouts = link lost
-#define ANT_DEFAULT_TX_POWER   17       // dBm
+
+// TX power options in dBm (user-facing / packet / log units).
+// esp_wifi_set_max_tx_power() takes 0.25 dBm units — use ANT_DBM_TO_IDF().
+#define ANT_TX_POWER_LOW        2       // dBm
+#define ANT_TX_POWER_MED        10      // dBm
+#define ANT_TX_POWER_HIGH       17      // dBm
+#define ANT_TX_POWER_MAX        20      // dBm
+#define ANT_DEFAULT_TX_POWER    17      // dBm
+#define ANT_DBM_TO_IDF(dbm)    ((int8_t)((dbm) * 4))
+
+// OLED
+#define ANT_OLED_I2C_ADDR       0x3C    // SSD1306; some modules use 0x3D
 #define ANT_OLED_SDA_PIN       21       // WROOM default (C3: 8) — see board_config.h
 #define ANT_OLED_SCL_PIN       22       // WROOM default (C3: 9)
 #define ANT_BUTTON_PIN         17       // WROOM default (C3: 5)
@@ -242,6 +256,19 @@ Station replies with `PKT_PONG` with its locally-measured Mobile RSSI and its TX
 #define ANT_BTN_LONG_MIN_MS    1500
 #define ANT_BTN_DOUBLE_GAP_MS  400
 ```
+
+> **Note on TX power clamping:** `esp_wifi_set_max_tx_power()` clamps to the chip's supported range. The ESP32-C3 minimum is ~3 dBm, so the `2 dBm` option may be clamped up to ~3 dBm on the C3; the WROOM-32 range is wider. Call `esp_wifi_get_max_tx_power()` after setting and log the *actual* achieved power so the `tx_*` columns reflect reality, not just the requested value.
+
+### Time Source
+
+The Station is a SoftAP with no uplink, so SNTP is unavailable, and the ESP32 has no battery-backed RTC. Wall-clock time is injected from the host PC over serial at boot:
+
+1. On boot, Station prints `TIME?` on the serial console.
+2. Host sends `SETTIME <YYYY-MM-DDTHH:MM:SS>` (or a Unix epoch).
+3. Station stores the offset from `esp_timer` boot time as the wall-clock baseline.
+4. If no time is received within ~5 s, Station names the session file `UNKNOWN_<bootcounter>.csv` and leaves the `datetime` column empty; per-sample `timestamp_ms` remains boot-relative and self-consistent.
+
+The Mobile does not require wall time. A real-time clock (e.g. DS3231 on I2C) is **out of scope** — serial injection is sufficient for USB-tethered Station operation.
 
 ---
 
@@ -271,6 +298,8 @@ idf.py build
 idf.py -p /dev/ttyUSB1 flash monitor
 ```
 
+Both firmware targets use a custom `partitions.csv` (4 MB flash, no OTA) with a 1 MB LittleFS partition for session logs. The Station build references `firmware/station/partitions.csv`; the Mobile build uses a matching layout without the logs partition. See [§8](#8-non-functional-requirements) for sizing rationale.
+
 ---
 
 ## 8. Non-Functional Requirements
@@ -279,17 +308,21 @@ idf.py -p /dev/ttyUSB1 flash monitor
 |----------|-------------|
 | Ping round-trip latency | < 200 ms at full signal |
 | OLED refresh rate | ≥ 2 Hz during active recording |
-| LittleFS capacity | ≥ 10,000 records per session (well within 1 MB flash partition) |
+| LittleFS capacity | ≥ 10,000 records per session (1 MB `logs` partition in `partitions.csv`; ~50 bytes/row → ~20k rows headroom) |
 | Button debounce | Hardware RC or software 20 ms debounce |
 | Portability | Firmware compiles for esp32, esp32c3, esp32s3 targets with only `board_config.h` changes |
 
 ---
 
-## 9. Open Items
+## 9. Resolved Items
 
-| ID | Item | Owner |
-|----|------|-------|
-| OI-01 | Confirm SSD1306 I2C address (0x3C vs 0x3D) on user's module | Hardware bring-up |
-| OI-02 | Decide whether Station clock is wall-time (SNTP) or boot-relative ms | Design |
-| OI-03 | Define LittleFS partition size in `partitions.csv` | Firmware |
-| OI-04 | Battery circuit for Mobile (voltage divider + ADC for battery indicator?) | Hardware |
+| ID | Item | Resolution | Date |
+|----|------|-----------|------|
+| OI-01 | SSD1306 I2C address (0x3C vs 0x3D) | Confirmed **0x3C** for the modules on hand; default set in `config.h` (`ANT_OLED_I2C_ADDR`). 0x3D note retained for other modules. | 2026-07-08 |
+| OI-02 | Station clock: wall-time (SNTP) vs boot-relative ms | Per-sample `timestamp_ms` stays boot-relative; wall-clock `datetime` column added to the CSV, set via **serial `SETTIME` injection** at boot (no RTC, SNTP out of scope — Station has no uplink). See [Time Source](#time-source). | 2026-07-08 |
+| OI-03 | LittleFS partition size in `partitions.csv` | **1 MB** `logs` partition (subtype `0x82`) on 4 MB flash, no OTA. ~20k-row headroom vs. the 10k-record NFR. File: `firmware/station/partitions.csv`. | 2026-07-08 |
+| OI-04 | Mobile battery circuit (voltage divider + ADC) | **No battery circuit.** Mobile is USB-powered (power bank or charger/cable). No battery indicator in the UI. | 2026-07-08 |
+
+### 9.1 Open Items
+
+(None currently open.)
