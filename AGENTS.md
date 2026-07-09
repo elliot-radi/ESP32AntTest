@@ -112,6 +112,23 @@ is locked; `protocol.c` and the Station/Mobile firmware are the next code.
 - **Build (host tool)** — `python3 -m venv .venv && pip install -r tools/requirements.txt`.
   Mockup CLI: `tools/mock_session.py` + `tools/analyze.py`.
 
+## Shared dev resources
+
+This project lives in a VM with a host-shared folder mounted at
+`/home/elliot/projects/share/lib/`. **Shared dev libraries live there, not
+in `~/`** — prefer that location for anything bulky/reusable across VMs to
+conserve VM disk. Notably:
+
+- **ESP-IDF v5.2.3** — `/home/elliot/projects/share/lib/esp-idf`.
+  Source the environment with the `idfenv` shell alias (defined in
+  `~/.bash_aliases`), which runs `. /home/elliot/projects/share/lib/esp-idf/export.sh`.
+  In a non-interactive shell, source that script directly.
+- **Toolchains** — `~/.espressif/` (installed by `install.sh`; shared across
+  IDF versions on this VM).
+
+If a tool/library seems missing, check `projects/share/lib/` before installing
+into `~/`.
+
 ## Out of scope
 
 Throughput/latency, >2 boards, 5 GHz, external network/cloud, OTA, noise-floor/SNR,
