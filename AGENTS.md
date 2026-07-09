@@ -33,6 +33,7 @@ docs/
   ADR-002-protocol-stack.md# UDP SoftAP/STA + ESP-NOW transport (addendum: sampling now beacon)
   ADR-003-toolchain.md     # ESP-IDF v5.2+, plain C, idf.py CLI
   ADR-004-beacon-sampling-and-host-tool.md  # beacon model + host webserver + quick-check (the architecture revision)
+  SERIAL_PROTOCOL.md       # host<->Station serial contract (channels, commands, log stream)
 protocols/
   range_walk.json          # example protocol: distance steps
   orientation_z.json       # example protocol: Z-axis 45° orientation sweep

@@ -210,7 +210,7 @@ The host PC is the primary interface for setup, execution, and results.
 
 #### Serial (live, machine-readable stream to host)
 
-Station streams every logged row as it's captured. The host webserver ingests this and writes the canonical CSV. Format is the same CSV schema as the LittleFS file (below), one row per line.
+Station streams every logged row as it's captured on the `>` log channel of the [Host ↔ Station Serial Protocol](SERIAL_PROTOCOL.md). The host webserver ingests this and writes the canonical CSV. Format is the same CSV schema as the LittleFS file (below), one row per line prefixed with `>`. Setup commands, session control, and events ride a separate `$`-prefixed control channel (JSON, one object per line); the two channels are multiplexed on the one serial line by prefix.
 
 #### LittleFS log (CSV, durable fallback — one file per session)
 
@@ -346,11 +346,11 @@ typedef enum {
 
 ### Time Source
 
-The Station is a SoftAP with no uplink, so SNTP is unavailable, and the ESP32 has no battery-backed RTC. Wall-clock time is injected from the host PC over serial at boot:
+The Station is a SoftAP with no uplink, so SNTP is unavailable, and the ESP32 has no battery-backed RTC. Wall-clock time is injected from the host PC over serial at boot, as part of the [Host ↔ Station Serial Protocol](SERIAL_PROTOCOL.md):
 
-1. On boot, Station prints `TIME?` on the serial console.
-2. Host sends `SETTIME <YYYY-MM-DDTHH:MM:SS>` (or a Unix epoch).
-3. Station stores the offset from `esp_timer` boot time as the wall-clock baseline.
+1. On boot, Station emits a banner (`# ...`) and a `$ {"evt":"time_prompt"}` control line on the serial console.
+2. Host sends `$ {"cmd":"settime","iso":"YYYY-MM-DDTHH:MM:SS"}` (or `"epoch":<unix>`).
+3. Station stores the offset from `esp_timer` boot time as the wall-clock baseline and replies `$ {"evt":"time_ok",...}`.
 4. If no time is received within ~5 s, Station names the session file `UNKNOWN_<bootcounter>.csv` and leaves the `datetime` column empty; per-sample `timestamp_ms` remains boot-relative and self-consistent.
 
 The Mobile does not require wall time. A real-time clock (e.g. DS3231 on I2C) is **out of scope** — serial injection is sufficient for USB-tethered Station operation.
