@@ -25,6 +25,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# C test binaries
+tests/test_protocol
+tests/*_test
+
 # Serial-captured logs from real hardware (NOT the committed synthetic design
 # artifacts in repo-root logs/). Keep root logs/ and plots/ tracked — they are
 # mockup outputs that document the schema validation.

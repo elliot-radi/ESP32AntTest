@@ -34,7 +34,7 @@ typedef struct __attribute__((packed)) {
     int8_t   rssi_local;    // RSSI measured locally by sender (of peer's last beacon) — piggyback
     int8_t   tx_power;      // sender's current TX power in dBm
     uint8_t  reserved[4];
-} ant_packet_t;             // 16 bytes
+} ant_packet_t;             // 20 bytes (LE wire format; see protocol.c)
 
 // Validate and decode a received buffer into ant_packet_t
 // Returns 0 on success, -1 on magic/version mismatch

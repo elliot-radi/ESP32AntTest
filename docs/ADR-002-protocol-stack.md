@@ -59,7 +59,7 @@ Rejected — the project goal is explicitly to compare WiFi and ESP-NOW performa
 Rejected — introduces an uncontrolled third party (the router's antenna, location, and congestion) into the measurement. The point is board-to-board characterization.
 
 ### MQTT or HTTP over SoftAP
-Rejected — far too heavyweight for 16-byte control packets. Unnecessary dependencies.
+Rejected — far too heavyweight for 20-byte control packets. Unnecessary dependencies.
 
 ---
 

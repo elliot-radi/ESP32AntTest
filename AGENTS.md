@@ -46,7 +46,7 @@ firmware/
   shared/
     include/
       config.h            # IMPLEMENTED — tuneables (dBm units, OLED addr, pins, beacon Hz, buffer)
-      protocol.h          # IMPLEMENTED — ant_packet_t (16 bytes) + encode/decode decls (needs PKT_BEACON etc.)
+      protocol.h          # IMPLEMENTED — ant_packet_t (20 bytes) + encode/decode decls (needs PKT_BEACON etc.)
     src/                   # PLANNED — protocol.c (encode/decode) not yet written
 tools/
   mock_session.py          # IMPLEMENTED — synthetic beacon-mode log generator (design artifact)
@@ -99,7 +99,7 @@ is locked; `protocol.c` and the Station/Mobile firmware are the next code.
 - **Language:** C (not C++). ESP-IDF native APIs only.
 - **Shared code** in `firmware/shared/`, referenced as a local component
   (`components/ant_shared -> ../../shared` symlink, per ADR-003).
-- **Packet** — `ant_packet_t`, 16 bytes, `__attribute__((packed))`. Magic
+- **Packet** — `ant_packet_t`, 20 bytes, `__attribute__((packed))`. Magic
   `0xAE 0x32`, version `0x01`. Types (v0.3): `PKT_BEACON`, `PKT_MARKER`,
   `PKT_PROTOCOL`, `PKT_MODE_ACK` (PING/PONG dropped). See
   [protocol.h](firmware/shared/include/protocol.h) + [SPEC §5](docs/SPEC.md).

@@ -265,7 +265,7 @@ typedef struct {
     int8_t   rssi_local;    // RSSI measured by sender (of peer's last beacon) — piggyback
     int8_t   tx_power;      // sender's current TX power (dBm)
     uint8_t  reserved[4];
-} ant_packet_t;             // 16 bytes total
+} ant_packet_t;             // 20 bytes total
 ```
 
 ### 5.2 Packet Types
