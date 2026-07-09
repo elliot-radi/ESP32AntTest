@@ -1,6 +1,7 @@
 # ESP-IDF build artifacts
 build/
 sdkconfig.old
+sdkconfig
 *.bin
 *.elf
 *.map

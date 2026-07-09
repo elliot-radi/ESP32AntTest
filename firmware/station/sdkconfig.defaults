@@ -1,0 +1,12 @@
+# Station sdkconfig defaults — applied by `idf.py set-target`.
+# Custom partition table (4 MB flash, no OTA, 1 MB LittleFS logs).
+# See firmware/station/partitions.csv and SPEC §7/§8.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# 4 MB flash (dev modules); the default is 2 MB which is too small for our
+# partition layout.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Station is a SoftAP with no uplink; we don't need the default station WiFi
+# config that tries to join an SSID. (WiFi init is stubbed in this skeleton.)
