@@ -69,3 +69,9 @@ Rejected — far too heavyweight for 16-byte control packets. Unnecessary depend
 - Mode A requires Mobile to know Station's IP address. Since Station is always SoftAP with a fixed IP (192.168.4.1 by default in ESP-IDF), this is a constant, not a discovery problem.
 - Mode B requires both boards to know each other's MAC address. MAC addresses are exchanged during Mode A initialization and stored in NVS for the session.
 - The `shared/protocol.h` packet definition must be valid for both transports (it is, since it's just a byte struct).
+
+---
+
+## Addendum — 2026-07-09 (ADR-004)
+
+The **transport** decisions in this ADR stand: UDP over SoftAP/STA for Mode A, native ESP-NOW for Mode B, both starting in Mode A, Station as SoftAP. Only the **sampling model on top** changes: request-response (ping/pong) is **superseded by autonomous beacons** (`PKT_BEACON`) with piggybacked `rssi_local`. See ADR-004 for the full rationale (asymmetric-RSSI / null-floor capture, Mobile RAM buffering, loss inferred from count). `PKT_PING`/`PKT_PONG` are dropped from the packet enum.

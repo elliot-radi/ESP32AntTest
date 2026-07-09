@@ -63,3 +63,14 @@ The standard ESP-NOW receive callback does not expose RSSI. The `esp_now_recv_in
 - In WiFi mode, `esp_wifi_ap_get_sta_list()` must be called at Station after each received ping, before composing the pong. This is a lightweight call.
 - The `rssi_local` field in `ant_packet_t` carries a one-exchange-old RSSI value (what the sender measured last time it received from the peer). For the purposes of this tool — aggregate metrics, not sub-millisecond precision — this lag is acceptable.
 - RSSI values are known to fluctuate ±5–10 dBm even at a fixed position. Burst averaging (N=10 pings per burst) is the primary mitigation.
+
+---
+
+## Addendum — 2026-07-09 (ADR-004)
+
+The sampling model changed from request-response to **autonomous beacons** (see ADR-004). The RSSI acquisition discussion above is revised accordingly:
+
+- **Both modes** now acquire RSSI on **per-beacon reception**, not via averaged native APIs polled per exchange. The promiscuous-mode callback (`wifi_promiscuous_pkt_t.rx_ctrl.rssi`), filtered by peer MAC, is the preferred path on both boards because it yields a true per-beacon RSSI and is portable across both WiFi and ESP-NOW.
+- The native averaged APIs (`esp_wifi_sta_get_ap_info` / `esp_wifi_ap_get_sta_list`) remain a valid *implementation alternative* for a smoothed per-step estimate if per-frame promiscuous setup proves costly on a given target, but they do not give true per-beacon RSSI.
+- The exact API choice is a firmware-implementation detail; this ADR commits to the **measurement semantics** (RSSI of the most recently decoded beacon, piggybacked in the next outbound beacon via `rssi_local`), not the specific call.
+- The directional split (RSSI_MOB vs RSSI_STA, each measured by the board that received the beacon) is unchanged — beacon mode preserves it via the piggyback.

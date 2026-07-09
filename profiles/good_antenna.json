@@ -1,0 +1,14 @@
+{
+  "name": "FPC antenna (good)",
+  "mob_gain_dbi": 2.0,
+  "mob_pattern_depth_db": 10,
+  "mob_null_angle_deg": 180,
+  "sta_gain_dbi": 1.5,
+  "decode_threshold_sta_dbm": -90,
+  "decode_threshold_mob_dbm": -90,
+  "jitter_db": 6.0,
+  "fading_db": 3.0,
+  "fading_hz": 0.12,
+  "beacon_hz": 5,
+  "path_loss_exp": 3.0
+}

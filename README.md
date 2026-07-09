@@ -48,6 +48,9 @@ docs/
 
 Built with ESP-IDF v5.x. See [docs/SPEC.md](docs/SPEC.md#build) for setup instructions.
 
+The host-side analysis tool (protocol authoring, session execution, plots) lives
+in `tools/` and runs from a Python venv — see [tools/README.md](tools/README.md).
+
 ## License
 
 MIT

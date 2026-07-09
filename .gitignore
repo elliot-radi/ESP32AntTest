@@ -25,5 +25,7 @@ __pycache__/
 *.pyc
 .venv/
 
-# Logs captured from serial (optional to exclude)
+# Serial-captured logs from real hardware (NOT the committed synthetic design
+# artifacts in repo-root logs/). Keep root logs/ and plots/ tracked — they are
+# mockup outputs that document the schema validation.
 tools/logs/*.csv

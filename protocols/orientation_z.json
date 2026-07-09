@@ -1,0 +1,18 @@
+{
+  "protocol_id": "orientation_z_45",
+  "name": "Orientation Sweep (Z axis, 45 deg steps, fixed 15m)",
+  "mode": "WIFI",
+  "tx_mob": 2,
+  "tx_sta": 5,
+  "fixed_distance_m": 15,
+  "steps": [
+    {"step_id": 1, "type": "orientation", "axis": "Z", "angle_deg": 0,   "prompt": "Rotate Z to 0 deg, press when ready",   "duration_s": 8},
+    {"step_id": 2, "type": "orientation", "axis": "Z", "angle_deg": 45,  "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 3, "type": "orientation", "axis": "Z", "angle_deg": 90,  "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 4, "type": "orientation", "axis": "Z", "angle_deg": 135, "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 5, "type": "orientation", "axis": "Z", "angle_deg": 180, "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 6, "type": "orientation", "axis": "Z", "angle_deg": 225, "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 7, "type": "orientation", "axis": "Z", "angle_deg": 270, "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8},
+    {"step_id": 8, "type": "orientation", "axis": "Z", "angle_deg": 315, "prompt": "Rotate Z +45 deg, press when ready",     "duration_s": 8}
+  ]
+}

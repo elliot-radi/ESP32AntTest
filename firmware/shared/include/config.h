@@ -7,7 +7,7 @@
 #define ANT_WIFI_CHANNEL        1
 #define ANT_SOFTAP_SSID_PREFIX  "AntTest"
 #define ANT_SOFTAP_PASS         ""        // open network
-#define ANT_STATION_IP          "192.168.4.1"
+#define ANT_STATION_IP          "192.168.26.1"
 #define ANT_UDP_PORT            5432
 
 // Measurement

@@ -1,0 +1,16 @@
+{
+  "protocol_id": "range_walk_5m",
+  "name": "Range Walk (low TX, to 70m)",
+  "mode": "WIFI",
+  "tx_mob": 2,
+  "tx_sta": 5,
+  "steps": [
+    {"step_id": 1, "type": "distance", "distance_m": 1,  "prompt": "Place Mobile at 1m, press when ready",  "duration_s": 10},
+    {"step_id": 2, "type": "distance", "distance_m": 5,  "prompt": "Walk to 5m, press when ready",        "duration_s": 10},
+    {"step_id": 3, "type": "distance", "distance_m": 10, "prompt": "Walk to 10m, press when ready",       "duration_s": 10},
+    {"step_id": 4, "type": "distance", "distance_m": 20, "prompt": "Walk to 20m, press when ready",       "duration_s": 10},
+    {"step_id": 5, "type": "distance", "distance_m": 35, "prompt": "Walk to 35m, press when ready",       "duration_s": 10},
+    {"step_id": 6, "type": "distance", "distance_m": 50, "prompt": "Walk to 50m, press when ready",       "duration_s": 10},
+    {"step_id": 7, "type": "distance", "distance_m": 70, "prompt": "Walk to 70m, press when ready",       "duration_s": 10}
+  ]
+}
