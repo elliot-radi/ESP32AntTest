@@ -35,6 +35,7 @@ docs/
   SPEC.md
   GLOSSARY.md
   HARDWARE.md
+  DEVENV.md
   SERIAL_PROTOCOL.md
   ADR-001-rssi-method.md
   ADR-002-protocol-stack.md

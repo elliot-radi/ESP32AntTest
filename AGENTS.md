@@ -28,6 +28,7 @@ README.md                  # overview, points to SPEC/HARDWARE
 docs/
   SPEC.md                  # THE spec (v0.3) — beacon model, schema, build, NFRs, resolved items
   HARDWARE.md              # board pin maps, wiring diagrams, power notes, USB-serial node notes
+  DEVENV.md                # dev VM + host setup; USB passthrough re-enumeration trap & libvirt fix
   GLOSSARY.md              # terminology (RSSI_MOB/STA, burst/run/step/session, ...)
   ADR-001-rssi-method.md   # RSSI capture (per-beacon; addendum points to ADR-004)
   ADR-002-protocol-stack.md# UDP SoftAP/STA + ESP-NOW transport (addendum: sampling now beacon)
@@ -143,6 +144,10 @@ conserve VM disk. Notably:
   In a non-interactive shell, source that script directly.
 - **Toolchains** — `~/.espressif/` (installed by `install.sh`; shared across
   IDF versions on this VM).
+- **USB passthrough gotcha** — the C3 board (`/dev/ttyACM*`) disappears from
+  the VM after a reset because virt-manager pins the USB bus/device number;
+  the fix is a vendor/product-only libvirt `<hostdev>`. See
+  [docs/DEVENV.md](docs/DEVENV.md).
 
 If a tool/library seems missing, check `projects/share/lib/` before installing
 into `~/`.
