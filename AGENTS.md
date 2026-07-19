@@ -6,7 +6,7 @@
 
 A condensed orientation for AI agents (and humans) joining the project.
 Designed to get a fresh context to "ready to work" without re-reading every
-doc. Last updated: 2026-07-09.
+doc. Last updated: 2026-07-19.
 
 ---
 
@@ -27,7 +27,7 @@ the analysis plots that are the actual value). Full spec:
 README.md                  # overview, points to SPEC/HARDWARE
 docs/
   SPEC.md                  # THE spec (v0.3) — beacon model, schema, build, NFRs, resolved items
-  HARDWARE.md              # board pin maps, wiring diagrams, power notes
+  HARDWARE.md              # board pin maps, wiring diagrams, power notes, USB-serial node notes
   GLOSSARY.md              # terminology (RSSI_MOB/STA, burst/run/step/session, ...)
   ADR-001-rssi-method.md   # RSSI capture (per-beacon; addendum points to ADR-004)
   ADR-002-protocol-stack.md# UDP SoftAP/STA + ESP-NOW transport (addendum: sampling now beacon)
@@ -42,28 +42,35 @@ profiles/
   bad_antenna.json        # synthetic antenna profile (ceramic, deep null)
 firmware/
   mobile/                  # PLANNED — empty (no CMakeLists, no main/, no board_config.h)
-  station/
-    partitions.csv         # IMPLEMENTED — 4 MB flash, no OTA, 1 MB LittleFS logs (subtype 0x82)
+  station/                 # SKELETON — CMakeLists + main/main.c (banner+self-test) + partitions.csv + components/ant_shared
+    partitions.csv         # 4 MB flash, no OTA, 1 MB LittleFS logs (subtype 0x82)
+  hwtest/                  # IMPLEMENTED — C3 board bring-up (I2C scan + OLED + button), verified on HW
+                           #   components/oled_text vendored in-repo (SSD1306 text wrapper over esp_lcd)
   shared/
+    CMakeLists.txt         # local component
     include/
-      config.h            # IMPLEMENTED — tuneables (dBm units, OLED addr, pins, beacon Hz, buffer)
-      protocol.h          # IMPLEMENTED — ant_packet_t (20 bytes) + encode/decode decls (needs PKT_BEACON etc.)
-    src/                   # PLANNED — protocol.c (encode/decode) not yet written
+      config.h            # tuneables (dBm units, OLED addr, pins, beacon Hz, buffer)
+      protocol.h          # ant_packet_t (20 bytes) + PKT_BEACON/MARKER/PROTOCOL/MODE_ACK
+    src/
+      protocol.c          # encode/decode — implemented + host-C unit tested
 tools/
-  mock_session.py          # IMPLEMENTED — synthetic beacon-mode log generator (design artifact)
-  analyze.py               # IMPLEMENTED — per-step stats + range/orientation/time plots (design artifact)
+  mock_session.py          # synthetic beacon-mode log generator (design artifact)
+  analyze.py               # per-step stats + range/orientation/time plots (design artifact)
   requirements.txt         # matplotlib (project venv)
   README.md                # what the mockup is and why
   server.py                # PLANNED — production FastAPI webserver (wraps analyze.py + serial bridge)
-tests/                     # PLANNED — empty
+tests/                     # IMPLEMENTED — test_protocol.c + Makefile (host-C encode/decode round-trip)
 logs/, plots/              # generated synthetic data + plots (design-process artifacts, committed)
 refs/                      # datasheets + pinout images (read-only reference)
 ```
 
-**Implementation status:** firmware pre-implementation (only the two shared
-headers + Station `partitions.csv` exist). **Log schema and analysis
-validated** via the `tools/` synthetic-data mockup (see ADR-004) — the schema
-is locked; `protocol.c` and the Station/Mobile firmware are the next code.
+**Implementation status:** `protocol.c` + host-C unit tests done; Station
+skeleton (banner + self-test) builds for `esp32c3`; `firmware/hwtest/` C3
+board bring-up (I2C scan + OLED + button) **verified on hardware**. **Log
+schema and analysis validated** via the `tools/` synthetic-data mockup (see
+ADR-004). Remaining firmware: Station behaviour (beacon RX, logging, serial
+protocol, LittleFS, protocol forward) and the Mobile firmware (OLED UI,
+button gestures, beacon TX/RX, RAM outage buffer); then `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -99,7 +106,15 @@ is locked; `protocol.c` and the Station/Mobile firmware are the next code.
 
 - **Language:** C (not C++). ESP-IDF native APIs only.
 - **Shared code** in `firmware/shared/`, referenced as a local component
-  (`components/ant_shared -> ../../shared` symlink, per ADR-003).
+  via a per-project `components/ant_shared -> ../../shared` symlink (per
+  ADR-003). Each firmware dir (`station/`, `hwtest/`, …) has its own
+  `components/` with the symlinks it needs.
+- **oled_text** (SSD1306 text wrapper over the official `esp_lcd` driver,
+  + a public-domain 5×7 font) is **vendored in-repo** under
+  `firmware/hwtest/components/oled_text/` (real files, not a symlink) so the
+  project is self-contained. Not an Arduino/Adafruit lib — chosen to stay
+  within ADR-003 (plain C, native IDF, no Arduino runtime). If a later
+  firmware (Mobile) also needs it, promote to a shared in-repo copy then.
 - **Packet** — `ant_packet_t`, 20 bytes, `__attribute__((packed))`. Magic
   `0xAE 0x32`, version `0x01`. Types (v0.3): `PKT_BEACON`, `PKT_MARKER`,
   `PKT_PROTOCOL`, `PKT_MODE_ACK` (PING/PONG dropped). See
@@ -107,8 +122,11 @@ is locked; `protocol.c` and the Station/Mobile firmware are the next code.
 - **Log schema** — [SPEC §3.6 / §4](docs/SPEC.md). Columns:
   `session_id,step_id,seq,timestamp_ms,datetime,mode,tx_mob,tx_sta,rssi_mob,rssi_sta,source,status`.
   `source` = STA (complete row) or MOB (Mobile-buffered during uplink outage).
-- **Config** — tuneables in `config.h`; board overrides in `board_config.h`.
+- **Config** — tuneables in `config.h`; board overrides in `board_config.h`
+  (included *before* `config.h` so its `#ifndef` guards pick them up).
 - **Build (firmware)** — `idf.py set-target <esp32|esp32c3>` per firmware dir.
+  Serial port: WROOM USB-UART bridge → `/dev/ttyUSB*`; C3-Zero/SuperMini
+  native USB JTAG/serial → `/dev/ttyACM*` (see [HARDWARE.md](docs/HARDWARE.md)).
 - **Build (host tool)** — `python3 -m venv .venv && pip install -r tools/requirements.txt`.
   Mockup CLI: `tools/mock_session.py` + `tools/analyze.py`.
 
@@ -119,9 +137,9 @@ This project lives in a VM with a host-shared folder mounted at
 in `~/`** — prefer that location for anything bulky/reusable across VMs to
 conserve VM disk. Notably:
 
-- **ESP-IDF v5.2.3** — `/home/elliot/projects/share/lib/esp-idf`.
-  Source the environment with the `idfenv` shell alias (defined in
-  `~/.bash_aliases`), which runs `. /home/elliot/projects/share/lib/esp-idf/export.sh`.
+- **ESP-IDF v5.2.3** — `/home/elliot/projects/share/lib/esp/esp-idf`.
+  Source the environment with the `get_idf` shell alias (defined in
+  `~/.bash_aliases`), which runs `. /home/elliot/projects/share/lib/esp/esp-idf/export.sh`.
   In a non-interactive shell, source that script directly.
 - **Toolchains** — `~/.espressif/` (installed by `install.sh`; shared across
   IDF versions on this VM).
@@ -136,13 +154,12 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
 
 ## Current next step
 
-1. `firmware/shared/src/protocol.c` — implement `ant_packet_encode`/
-   `ant_packet_decode` (declared in `protocol.h`); add `PKT_BEACON`/
-   `PKT_MARKER`/`PKT_PROTOCOL` to the enum in `protocol.h`.
-2. `tests/` — unit test for encode/decode round-trip + magic/version validation.
-3. `firmware/shared/CMakeLists.txt` as a local component.
-4. Station firmware skeleton (serial protocol receive + forward to Mobile +
-   log + stream to host), then Mobile (guided OLED mode + RAM buffer).
-5. `tools/server.py` — FastAPI webserver wrapping `analyze.py` + serial bridge.
+1. `firmware/station/` — flesh out the skeleton: beacon RX (promiscuous
+   callback), logging to serial + LittleFS, host serial protocol
+   (SERIAL_PROTOCOL.md), protocol forward to Mobile.
+2. `firmware/mobile/` — OLED UI + button gestures (build on the `hwtest/`
+   wiring), beacon TX/RX, RAM outage buffer + forward-on-reconnect.
+3. `tools/server.py` — FastAPI webserver wrapping `analyze.py` + serial
+   bridge to Station.
 
 Update the "Implementation status" line above and this list as work lands.

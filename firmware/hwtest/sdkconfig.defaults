@@ -1,0 +1,2 @@
+# hwtest sdkconfig defaults — C3 board bring-up (no custom partition table)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

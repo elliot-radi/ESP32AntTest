@@ -380,8 +380,15 @@ idf.py -p /dev/ttyUSB0 flash monitor
 cd firmware/station
 idf.py set-target esp32c3      # Config A (C3); use esp32 for Config B
 idf.py build
-idf.py -p /dev/ttyUSB1 flash monitor
+idf.py -p /dev/ttyACM0 flash monitor
 ```
+
+> **Serial device nodes:** the ESP32-WROOM-32 dev module exposes a USB-UART
+> bridge (CP2102/CH340) and appears as `/dev/ttyUSB*`; the ESP32-C3-Zero /
+> SuperMini exposes its **native USB JTAG/serial** unit and appears as
+> `/dev/ttyACM*` (e.g. `/dev/ttyACM0`). Adjust the `-p` port to match the
+> board actually plugged in. (`idf.py monitor` needs a TTY; in a
+> non-interactive shell, read the UART directly with pyserial.)
 
 Station uses a custom `partitions.csv` (4 MB flash, no OTA) with a 1 MB LittleFS `logs` partition (`firmware/station/partitions.csv`). Mobile uses a minimal partition table (nvs + phy + factory only — no `logs` partition, since Mobile has no LittleFS).
 

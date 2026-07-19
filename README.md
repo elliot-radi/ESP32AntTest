@@ -27,22 +27,26 @@ See [docs/HARDWARE.md](docs/HARDWARE.md) for wiring diagrams and pin assignments
 
 ```
 firmware/
-  mobile/    # Mobile firmware — OLED UI, button input, session control
-  station/   # Station firmware — data logging, serial output, LittleFS
+  mobile/    # Mobile firmware — OLED UI, button input, session control (planned)
+  station/   # Station firmware — data logging, serial output, LittleFS (skeleton)
+  hwtest/    # C3 board bring-up (I2C scan + OLED + button)
   shared/    # Common packet structs, protocol constants
 docs/
   SPEC.md
   GLOSSARY.md
   HARDWARE.md
+  SERIAL_PROTOCOL.md
   ADR-001-rssi-method.md
   ADR-002-protocol-stack.md
   ADR-003-toolchain.md
+  ADR-004-beacon-sampling-and-host-tool.md
 ```
 
 ## Test Scenarios
 
-1. **Range Walk** — press button every increment, collect bursts at each stop
-2. **Time Soak** — auto-sample every 5 seconds until stopped; observe signal variation over time
+1. **Range Walk** — press button at each distance step, collect beacon RSSI samples
+2. **Orientation** — single-axis rotation sweep; polar RSSI-vs-angle plot exposes radiation-pattern asymmetry
+3. **Time Soak** — auto-sample every 5 s until stopped; observe signal variation over time
 
 ## Build
 

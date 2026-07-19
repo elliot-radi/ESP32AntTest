@@ -11,8 +11,9 @@ ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + butt
 | Item | Notes |
 |------|-------|
 | Chip | ESP32-C3, RISC-V single-core, 2.4 GHz |
+| Board | ESP32-C3-Zero / SuperMini (pinout in `refs/ESP32-C3-Zero_pinout.webp`) |
 | Antenna | Ceramic PCB antenna (onboard) |
-| USB | USB-C for power and serial |
+| USB | USB-C; **native USB JTAG/serial** (no UART bridge) → `/dev/ttyACM*` |
 
 ### ESP32-WROOM-32 Dev Module
 
@@ -20,7 +21,7 @@ ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + butt
 |------|-------|
 | Chip | ESP32-WROOM-32, dual-core Xtensa, 2.4 GHz |
 | Antenna | FPC antenna (adhered to PCB) |
-| USB | Micro-USB for power and serial (38-pin or 30-pin variant) |
+| USB | Micro-USB via USB-UART bridge (CP2102/CH340) → `/dev/ttyUSB*` (38-pin or 30-pin variant) |
 
 ---
 
@@ -98,6 +99,13 @@ Pin assignments are keyed to the **board**, not the role, so they remain valid i
 
 
 For software debounce only (no RC filter), simply wire the button between the chosen GPIO and GND. Internal pull-up is enabled via `gpio_set_pull_mode(ANT_BUTTON_PIN, GPIO_PULLUP_ONLY)`.
+
+> **Board bring-up:** `firmware/hwtest/` is a self-contained C3 bring-up
+> sketch that runs an I2C scan, renders to the OLED, and echoes the button —
+> it validates the Mobile wiring above before the real Mobile firmware is
+> built on top of it. C3 pin overrides live in
+> `firmware/hwtest/main/board_config.h` (included before `config.h` so its
+> `#ifndef` guards pick up the C3 values).
 
 ---
 
