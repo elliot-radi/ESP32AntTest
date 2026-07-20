@@ -165,6 +165,12 @@ General IDF items also live in the `esp-idf-build` skill.
   Mobile applies before guided/ad-hoc recording. Empty JSON still gets one
   setup chunk so power-only sessions work. CSV `tx_mob` comes from Mobile's
   beacon `tx_power` after apply (verify with `tx_mob=2` → rows show `2`).
+- **ESP-NOW session switch** — do **not** flip Station to ESPNOW before
+  `PKT_PROTOCOL` forward (Mobile is still on SoftAP/UDP). Order: stash cmds →
+  forward on WiFi (`step_id`=mode, `tx_power`=tx_mob) → short delay → Station
+  `set_mode(ESPNOW)` → optional re-forward. Mobile defers mode apply out of
+  the recv lock (beacon task). `end_session` commands Mobile back to WIFI then
+  Station returns to SoftAP Quick-Check. Desk: ~5 Hz `mode=ESPNOW` dual-RSSI.
 - **`source=MOB` outage rows** — Mobile sets `reserved[0] |= ANT_RSV0_MOB_OUTAGE`
   on buffered RSSI beacons when it still hears Station but Station piggyback
   is empty/stale >~2 s; Station logs `LOG_SRC_MOB` with empty `rssi_sta`.

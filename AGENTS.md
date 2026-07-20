@@ -75,8 +75,11 @@ Mobile: STA join, beacons, OLED/button, outage RAM buffer, **guided multi-step**
 **Host `tx_mob`/`tx_sta`:** `start_session` applies `tx_sta` on Station and
 commands Mobile TX via `PKT_PROTOCOL.tx_power` (desk: `tx_mob=2` → CSV `2`).
 **Open HW:** true *asymmetric* sidelink outage → `source=MOB` rows (TX skew +
-range produced link_loss/rejoin and dual STA rows, not MOB drain). Remaining:
-that outage field test (or inject), ESP-NOW HW, ad-hoc Auto, `tools/server.py`.
+range produced link_loss/rejoin and dual STA rows, not MOB drain).
+**ESP-NOW:** host `mode=ESPNOW` forwards setup on WiFi first, both sides
+switch — desk dual-RSSI `mode=ESPNOW` rows @ ~5 Hz verified; end_session
+returns Station (and Mobile via setup) to Mode A WiFi. Remaining: outage
+field test (or inject), ad-hoc Auto, `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -185,8 +188,7 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
    Needs downlink OK + empty/stale Station piggyback >~2 s on Mobile, then
    drain (TX skew `tx_mob`≪`tx_sta` + geometry helps; full SoftAP drop alone
    is not enough). Optional: Station empty-piggyback inject for path checkout.
-2. ESP-NOW mode path — code present on both sides; HW verify.
-3. Ad-hoc Auto (time-soak) on Mobile.
-4. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
+2. Ad-hoc Auto (time-soak) on Mobile.
+3. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
 
 Update the "Implementation status" line above and this list as work lands.
