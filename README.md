@@ -29,34 +29,40 @@ See [docs/HARDWARE.md](docs/HARDWARE.md) for wiring diagrams and pin assignments
 
 ```
 firmware/
-  mobile/    # Mobile firmware — OLED UI, button input, session control (planned)
-  station/   # Station firmware — data logging, serial output, LittleFS (skeleton)
+  mobile/    # Mobile — Quick-Check, guided steps, beacons, outage buffer
+  station/   # Station — SoftAP/ESP-NOW, session log stream, LittleFS
   hwtest/    # C3 board bring-up (I2C scan + OLED + button)
   shared/    # Common packet structs, protocol constants
+tools/       # Host web UI + analyze CLI (see tools/README.md)
+protocols/   # Guided session JSON (edit in-repo; no UI editor yet)
 docs/
-  SPEC.md
-  GLOSSARY.md
-  HARDWARE.md
-  DEVENV.md
-  SERIAL_PROTOCOL.md
-  ADR-001-rssi-method.md
-  ADR-002-protocol-stack.md
-  ADR-003-toolchain.md
-  ADR-004-beacon-sampling-and-host-tool.md
+  SPEC.md, HARDWARE.md, DEVENV.md, SERIAL_PROTOCOL.md, ADRs, …
 ```
 
 ## Test Scenarios
 
-1. **Range Walk** — press button at each distance step, collect beacon RSSI samples
-2. **Orientation** — single-axis rotation sweep; polar RSSI-vs-angle plot exposes radiation-pattern asymmetry
-3. **Time Soak** — auto-sample every 5 s until stopped; observe signal variation over time
+1. **Range Walk** — host-loaded `range_walk` protocol; short-press at each distance; continuous beacons log RSSI
+2. **Orientation** — host-loaded orientation sweep; polar RSSI-vs-angle plot exposes radiation-pattern asymmetry
+3. **Time Soak** — host-guided `soak` / long `free` step; continuous beacons for a fixed placement; analyze RSSI vs time
 
-## Build
+## Build / run
 
-Built with ESP-IDF v5.x. See [docs/SPEC.md](docs/SPEC.md#build) for setup instructions.
+**Firmware (ESP-IDF v5.x):** flash from a machine with the toolchain (often the
+dev VM). See [docs/SPEC.md](docs/SPEC.md#build), [docs/DEVENV.md](docs/DEVENV.md),
+[firmware/NOTES.md](firmware/NOTES.md).
 
-The host-side analysis tool (protocol authoring, session execution, plots) lives
-in `tools/` and runs from a Python venv — see [tools/README.md](tools/README.md).
+**Host instrument UI:** Python venv on the **PC that has Station USB** (need not
+be the build VM — shared project tree is enough):
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r tools/requirements.txt
+python tools/server.py --port 8000
+# browser → Connect /dev/ttyUSB0 → pick protocol → Start session
+```
+
+Details: [tools/README.md](tools/README.md). Plots: `tools/analyze.py` on
+`logs/host/*.csv` (UI wrap still pending).
 
 ## License
 

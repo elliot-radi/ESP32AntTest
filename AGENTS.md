@@ -58,9 +58,9 @@ firmware/
 tools/
   mock_session.py          # synthetic beacon-mode log generator (design artifact)
   analyze.py               # per-step stats + range/orientation/time plots (design artifact)
-  requirements.txt         # matplotlib (project venv)
-  README.md                # what the mockup is and why
-  server.py                # SLICE 1 — FastAPI + serial_bridge + static UI (live session)
+  requirements.txt         # fastapi, uvicorn, pyserial, matplotlib
+  README.md                # mockup + host server run notes
+  server.py                # FastAPI host UI: session control + live log (slice 1)
   serial_bridge.py         # Station serial client ($/>/#)
   static/                  # vanilla JS host UI
 tests/                     # IMPLEMENTED — test_protocol.c + Makefile (host-C encode/decode round-trip)
@@ -68,20 +68,15 @@ logs/, plots/              # generated synthetic data + plots (design-process ar
 refs/                      # datasheets + pinout images (read-only reference)
 ```
 
-**Implementation status (2026-07-20):** Shared packet encode/decode + host-C
-tests done. Station: serial + session + LittleFS, SoftAP/UDP beacons @ 5 Hz,
-promiscuous RSSI, session `>` logging, `PKT_PROTOCOL` forward (re-sends on
-STA join during session), **`source=MOB` merge** (`ANT_RSV0_MOB_OUTAGE`).
-Mobile: STA join, beacons, OLED/button, outage RAM buffer, **guided multi-step**
-(short-press ready/advance — desk HW OK after continuous button poll fix).
-**Host `tx_mob`/`tx_sta`:** `start_session` applies `tx_sta` on Station and
-commands Mobile TX via `PKT_PROTOCOL.tx_power` (desk: `tx_mob=2` → CSV `2`).
-**Open HW:** true *asymmetric* sidelink outage → `source=MOB` rows (TX skew +
-range produced link_loss/rejoin and dual STA rows, not MOB drain).
-**ESP-NOW:** host `mode=ESPNOW` forwards setup on WiFi first, both sides
-switch — desk dual-RSSI `mode=ESPNOW` rows @ ~5 Hz verified; end_session
-returns Station (and Mobile via setup) to Mode A WiFi. Remaining: outage
-field test (or inject), `tools/server.py`.
+**Implementation status (2026-07-20):** Firmware sensor head is largely in
+place (Station + Mobile Mode A, guided multi-step, TX via `PKT_PROTOCOL`,
+ESP-NOW mode switch HW-checked, ESP-NOW dual-RSSI desk OK). Host tool slice 1
+is in-tree and **HW-used**: connect Station, load `protocols/*.json`,
+start/end session, live `>` tail, CSV mirror under `logs/host/`. Prefer
+running `tools/server.py` on the **hypervisor host** with Station USB local
+(shared repo); use the build VM for IDF flash/debug. Protocol **editor** is
+deferred (edit JSON in `protocols/`). **Open:** asymmetric `source=MOB`
+outage field proof; wrap `analyze.py` plots in the host UI (CLI works today).
 
 ## Key decisions (pointers, not re-statements)
 
@@ -89,8 +84,9 @@ field test (or inject), `tools/server.py`.
   `rssi_local`; request-response dropped). Captures asymmetric/null-floor
   RSSI. Mobile RAM-buffers outage data, forwards on reconnect, host merges by
   `step_id`. See [ADR-004](docs/ADR-004-beacon-sampling-and-host-tool.md).
-- **Host tool is a first-class deliverable** — local FastAPI + matplotlib +
-  vanilla JS webserver; no cloud, no build step. See ADR-004 + [SPEC §3.7](docs/SPEC.md).
+- **Host tool is a first-class deliverable** — local FastAPI + vanilla JS +
+  analyze CLI (matplotlib); no cloud. Session UI = slice 1; protocol authoring
+  UI deferred. See ADR-004 + [SPEC §3.7](docs/SPEC.md) + [tools/README.md](tools/README.md).
 - **Quick-Check is the default power-up** — auto-connect WiFi, beacon,
   display live RSSI, no log. Logged characterization is host-guided only
   (protocol + session); ad-hoc Manual/Auto out of scope. See [SPEC §3.3](docs/SPEC.md).
@@ -155,8 +151,9 @@ or NOTES contents into this file — pointers only.
 - **Build (firmware)** — `idf.py set-target <esp32|esp32c3>` per firmware dir.
   Serial port: WROOM USB-UART bridge → `/dev/ttyUSB*`; C3-Zero/SuperMini
   native USB JTAG/serial → `/dev/ttyACM*` (see [HARDWARE.md](docs/HARDWARE.md)).
-- **Build (host tool)** — `python3 -m venv .venv && pip install -r tools/requirements.txt`.
-  Mockup CLI: `tools/mock_session.py` + `tools/analyze.py`.
+- **Build (host tool)** — on host or VM: `python3 -m venv .venv && pip install -r tools/requirements.txt`.
+  Run: `python tools/server.py --port 8000` (Station on this machine's USB).
+  Mockup/analyze CLI: `tools/mock_session.py` + `tools/analyze.py`.
 
 ## Shared dev resources
 
@@ -189,12 +186,13 @@ battery/RTC hardware, sleep modes, multi-axis orientation, **ad-hoc Manual/Auto*
 
 1. **TODO (field):** Prove asymmetric outage path → `source=MOB` rows.
    Needs downlink OK + empty/stale Station piggyback >~2 s on Mobile, then
-   drain (TX skew `tx_mob`≪`tx_sta` + geometry helps; full SoftAP drop alone
-   is not enough). Optional: Station empty-piggyback inject for path checkout.
-2. `tools/server.py` slice 2 — protocol authoring UI + wrap `analyze.py` plots
-   on finished/host CSVs (slice 1: connect/session/live tail is in-tree).
+   drain (TX skew / geometry; SoftAP total drop alone is not enough).
+2. Host UI: wrap `analyze.py` on `logs/host/*.csv` (range/orientation/time plots).
+3. **Deferred:** in-browser protocol authoring (edit `protocols/*.json` instead).
 
-Ad-hoc Manual/Auto are **out of scope** (SPEC DI-11); do not implement.
-Time-soak = host guided `soak`/`free` + plots.
+Ad-hoc Manual/Auto are **out of scope** (SPEC DI-11). Time-soak = host guided
+`soak`/`free` +
+plots. Day-to-day characterization needs firmware flashed once; operate from
+host-side `tools/server.py` + Station USB (no VM required for RF runs).
 
 Update the "Implementation status" line above and this list as work lands.
