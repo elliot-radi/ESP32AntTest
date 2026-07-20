@@ -68,7 +68,34 @@ class StationBridge:
         import serial  # pyserial
 
         self.disconnect()
-        ser = serial.Serial(port, baud, timeout=0.05)
+        # exclusive=True so a second client (stale server / monitor) fails loud
+        # instead of partially stealing RX and making hello "time out".
+        # dsrdtr/rtscts False + explicit lines: avoid accidental WROOM reset on open.
+        try:
+            ser = serial.Serial(
+                port=port,
+                baudrate=baud,
+                timeout=0.05,
+                write_timeout=2.0,
+                dsrdtr=False,
+                rtscts=False,
+                exclusive=True,
+            )
+        except TypeError:
+            # pyserial older / platform without exclusive
+            ser = serial.Serial(port=port, baudrate=baud, timeout=0.05,
+                               dsrdtr=False, rtscts=False)
+        except Exception as e:
+            raise RuntimeError(
+                f"open {port} failed: {e}. Is another process using the port "
+                f"(stale server.py, idf monitor, screen)?"
+            ) from e
+        try:
+            ser.setDTR(False)
+            ser.setRTS(False)
+        except Exception:
+            pass
+        time.sleep(0.05)
         ser.reset_input_buffer()
         with self._lock:
             self._ser = ser
@@ -76,16 +103,32 @@ class StationBridge:
             self.state = BridgeState(connected=True, port=port)
         self._thread = threading.Thread(target=self._reader, name="sta-serial", daemon=True)
         self._thread.start()
-        # small settle after open/USB noise
-        time.sleep(0.3)
-        try:
-            hello = self.cmd({"cmd": "hello"}, wait_evt="hello", timeout=2.0)
+        # Station may reboot if lines toggled; allow boot + retries for hello.
+        time.sleep(0.4)
+        hello = None
+        last_err: Optional[Exception] = None
+        for attempt in range(4):
+            try:
+                hello = self.cmd({"cmd": "hello"}, wait_evt="hello", timeout=2.5)
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                time.sleep(0.4 + 0.3 * attempt)
+        if hello is not None:
             self.state.hello = hello
-        except Exception as e:
-            self.state.last_error = str(e)
-            hello = None
-        self._emit("connected", {"port": port, "hello": hello})
-        return {"ok": True, "port": port, "hello": hello}
+            self.state.last_error = None
+        else:
+            self.state.last_error = str(last_err) if last_err else "hello failed"
+            LOG.warning("hello failed on %s: %s", port, self.state.last_error)
+        self._emit("connected", {"port": port, "hello": hello,
+                                 "error": self.state.last_error})
+        return {
+            "ok": hello is not None,
+            "port": port,
+            "hello": hello,
+            "error": self.state.last_error,
+        }
 
     def disconnect(self) -> None:
         self._stop.set()

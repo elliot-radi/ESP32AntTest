@@ -94,13 +94,18 @@ function paintState(s) {
   const bits = [
     `connected=${s.connected}`,
     s.port ? `port=${s.port}` : "",
-    s.hello ? `fw=${s.hello.fw || "?"} mac=${s.hello.mac || "?"}` : "",
+    s.hello
+      ? `fw=${s.hello.fw || "?"} mac=${s.hello.mac || "?"}`
+      : s.connected
+        ? "hello=pending/failed"
+        : "",
     s.session_active ? `SESSION ${s.session_id || ""}` : "quickcheck",
     s.protocol_id ? `protocol=${s.protocol_id}` : "",
     s.csv_path ? `csv=${s.csv_path}` : "",
-    s.last_error ? `err=${s.last_error}` : "",
   ].filter(Boolean);
-  $("connInfo").textContent = bits.join(" | ");
+  let text = bits.join(" | ");
+  if (s.last_error) text += `\nerr: ${s.last_error}`;
+  $("connInfo").textContent = text;
   $("rowCount").textContent = String(s.row_count || 0);
   if (s.last_status) {
     $("sessInfo").textContent = JSON.stringify(s.last_status);
@@ -127,7 +132,14 @@ async function connect() {
       method: "POST",
       body: JSON.stringify({ port }),
     });
-    $("connInfo").textContent = JSON.stringify(res, null, 2);
+    if (res.hello) {
+      $("connInfo").textContent =
+        `connected ${port}  fw=${res.hello.fw || "?"} mac=${res.hello.mac || "?"}`;
+    } else {
+      $("connInfo").textContent =
+        `port open on ${port} but hello failed: ${res.error || "unknown"}\n` +
+        `Stop any other process using the port (old server.py / idf monitor), then Connect again.`;
+    }
     await pullState();
   } catch (e) {
     $("connInfo").textContent = `Connect failed (${port}): ${e.message}`;
