@@ -109,6 +109,14 @@ row merge, ESP-NOW path HW check, then `tools/server.py`.
 - **Orientation** — single-axis sweeps (`axis`+`angle_deg`); polar plot.
   See [SPEC §3.2](docs/SPEC.md).
 
+## Before touching firmware
+
+Read [firmware/NOTES.md](firmware/NOTES.md) for this repo’s flash/capture
+workflow, Config A ports, SoftAP/scan notes, and project-specific gotchas.
+Load the `esp-idf-build` skill for shared ESP-IDF v5 traps (mutex-vs-printf,
+stack sizes, LittleFS, C3 re-enum, `rf_init` clash, etc.). Don’t paste skill
+or NOTES contents into this file — pointers only.
+
 ## Conventions
 
 - **Language:** C (not C++). ESP-IDF native APIs only.
