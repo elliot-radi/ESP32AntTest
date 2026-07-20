@@ -21,9 +21,13 @@ kept committed so future readers can see how the schema was derived.
   webserver (`server.py`, to be built) can wrap the same logic in HTTP endpoints.
 - **`requirements.txt`** — `matplotlib` (numpy comes along as a dep). Use a
   project venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -r tools/requirements.txt`.
-- **`server.py`** *(planned, not yet written)* — the production FastAPI
-  webserver: protocol authoring UI, session execution (serial bridge to
-  Station), live view, results/plots. Wraps `analyze.py`.
+- **`server.py`** — FastAPI host webserver (slice 1):
+  serial bridge to Station, protocol list/load from `protocols/`,
+  start/end session, live `>` / `$` tail via SSE, vanilla JS UI under
+  `static/`. CSV mirror written to `logs/host/<session_id>.csv`.
+  Plots / authoring UI still TODO (will wrap `analyze.py`).
+- **`serial_bridge.py`** — thread-safe Station serial client used by
+  `server.py` (`SERIAL_PROTOCOL.md`).
 
 ## The mockup as a design artifact
 
@@ -60,3 +64,18 @@ The mockup's RF model (path loss, antenna pattern, jitter, fading, decode
 thresholds) is intentionally tunable in the profile JSONs — the default
 tuning compresses outages into short distances so the asymmetric-capture
 behavior is visible without a field test. It is a model, not a measurement.
+
+## Host webserver (slice 1)
+
+```bash
+# from repo root
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r tools/requirements.txt
+python tools/server.py --port 8000
+# open http://127.0.0.1:8000/
+# Connect → /dev/ttyUSB0 (Station) → pick protocol → Start session
+```
+
+API sketch: `GET /api/ports`, `POST /api/connect`, `GET /api/protocols`,
+`POST /api/start_session`, `POST /api/end_session`, `GET /api/stream` (SSE),
+`GET /api/state`.

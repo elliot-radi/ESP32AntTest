@@ -60,7 +60,9 @@ tools/
   analyze.py               # per-step stats + range/orientation/time plots (design artifact)
   requirements.txt         # matplotlib (project venv)
   README.md                # what the mockup is and why
-  server.py                # PLANNED — production FastAPI webserver (wraps analyze.py + serial bridge)
+  server.py                # SLICE 1 — FastAPI + serial_bridge + static UI (live session)
+  serial_bridge.py         # Station serial client ($/>/#)
+  static/                  # vanilla JS host UI
 tests/                     # IMPLEMENTED — test_protocol.c + Makefile (host-C encode/decode round-trip)
 logs/, plots/              # generated synthetic data + plots (design-process artifacts, committed)
 refs/                      # datasheets + pinout images (read-only reference)
@@ -189,7 +191,8 @@ battery/RTC hardware, sleep modes, multi-axis orientation, **ad-hoc Manual/Auto*
    Needs downlink OK + empty/stale Station piggyback >~2 s on Mobile, then
    drain (TX skew `tx_mob`≪`tx_sta` + geometry helps; full SoftAP drop alone
    is not enough). Optional: Station empty-piggyback inject for path checkout.
-2. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
+2. `tools/server.py` slice 2 — protocol authoring UI + wrap `analyze.py` plots
+   on finished/host CSVs (slice 1: connect/session/live tail is in-tree).
 
 Ad-hoc Manual/Auto are **out of scope** (SPEC DI-11); do not implement.
 Time-soak = host guided `soak`/`free` + plots.

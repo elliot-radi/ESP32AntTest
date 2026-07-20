@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ESP32AntTest Host</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>ESP32AntTest</h1>
+    <p class="sub">Host tool — serial session + live log (slice 1)</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Station serial</h2>
+      <div class="row">
+        <label>Port
+          <select id="portSelect"></select>
+        </label>
+        <input id="portCustom" type="text" placeholder="/dev/ttyUSB0" size="16" />
+        <button id="btnRefreshPorts" type="button">Refresh</button>
+        <button id="btnConnect" type="button" class="primary">Connect</button>
+        <button id="btnDisconnect" type="button">Disconnect</button>
+      </div>
+      <pre id="connInfo" class="mono small">Not connected</pre>
+    </section>
+
+    <section class="card">
+      <h2>Session</h2>
+      <div class="row">
+        <label>Protocol
+          <select id="protoSelect"></select>
+        </label>
+        <label>Mode
+          <select id="modeSelect">
+            <option value="WIFI" selected>WIFI</option>
+            <option value="ESPNOW">ESPNOW</option>
+          </select>
+        </label>
+        <label>TX mob
+          <input id="txMob" type="number" value="17" min="2" max="20" style="width:4em" />
+        </label>
+        <label>TX sta
+          <input id="txSta" type="number" value="17" min="2" max="20" style="width:4em" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="btnStart" type="button" class="primary">Start session</button>
+        <button id="btnEnd" type="button">End session</button>
+        <button id="btnStatus" type="button">Status</button>
+        <button id="btnSettime" type="button">Set time</button>
+      </div>
+      <pre id="sessInfo" class="mono small">—</pre>
+    </section>
+
+    <section class="card grow">
+      <h2>Live row tail <span id="rowCount" class="badge">0</span></h2>
+      <div id="live" class="mono live"></div>
+    </section>
+
+    <section class="card">
+      <h2>Events</h2>
+      <div id="events" class="mono live short"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
