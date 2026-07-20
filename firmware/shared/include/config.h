@@ -37,20 +37,20 @@
 #define ANT_BTN_DEBOUNCE_MS     20
 
 // OLED + button — Mobile-side pins. Override in board_config.h.
-// Mobile-side pins. Config A (default) = C3 as Mobile; Config B = WROOM-32
-// as Mobile. #defines below are the WROOM (Config B) fallback; C3 (Config A)
-// overrides in board_config.h: SDA=8, SCL=9, Button=5.
+// Config A (default) = C3 as Mobile; the #defines below are the C3 (Config A)
+// defaults. Config B = WROOM-32 as Mobile; override in board_config.h:
+// SDA=21, SCL=22, Button=17.
 #ifndef ANT_OLED_I2C_ADDR
 #define ANT_OLED_I2C_ADDR       0x3C    // SSD1306; some modules use 0x3D
 #endif
 #ifndef ANT_OLED_SDA_PIN
-#define ANT_OLED_SDA_PIN        21
+#define ANT_OLED_SDA_PIN        8     // C3 (Config A default); WROOM (Config B): 21
 #endif
 #ifndef ANT_OLED_SCL_PIN
-#define ANT_OLED_SCL_PIN        22
+#define ANT_OLED_SCL_PIN        9     // C3 (Config A default); WROOM (Config B): 22
 #endif
 #ifndef ANT_BUTTON_PIN
-#define ANT_BUTTON_PIN          17
+#define ANT_BUTTON_PIN          5     // C3 (Config A default); WROOM (Config B): 17
 #endif
 
 // Mobile outage buffer (RAM ring buffer; no LittleFS on Mobile — see ADR-004)

@@ -1,9 +1,10 @@
 #pragma once
 /* ESP32AntTest — board_config.h for the hwtest (ESP32-C3-Zero / SuperMini)
  *
- * config.h supplies ESP32-WROOM-32 pin defaults behind #ifndef guards.
- * Including this header before config.h overrides them for the C3 board
- * actually wired up here. See docs/HARDWARE.md and SPEC §2.1 / §2.2.
+ * config.h now defaults to the C3 Mobile pins (Config A) behind #ifndef
+ * guards, so this file is technically redundant for a C3 board — kept as an
+ * explicit assertion of the wiring for this self-contained bring-up sketch.
+ * See docs/HARDWARE.md and SPEC §2.1 / §2.2.
  *
  * C3 Mobile pins (per HARDWARE.md):
  *   OLED SDA = GPIO 8, OLED SCL = GPIO 9, Button = GPIO 5

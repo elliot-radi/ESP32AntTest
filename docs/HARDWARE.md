@@ -146,13 +146,13 @@ The following antenna types are candidates for substitution during testing sessi
 
 ## Changing Target Board / Configuration
 
-To switch configurations or substitute a different board variant, edit `board_config.h` in the appropriate firmware directory:
+To switch configurations or substitute a different board variant, edit `board_config.h` in the appropriate firmware directory. Config A (C3-Mobile) is the `config.h` default and needs no `board_config.h`; Config B (WROOM-Mobile) overrides it:
 
 ```c
-// firmware/mobile/main/board_config.h
-#define ANT_OLED_SDA_PIN    8    // C3 default (Config A); use 21 for WROOM (Config B)
-#define ANT_OLED_SCL_PIN    9    // C3 default (Config A); use 22 for WROOM (Config B)
-#define ANT_BUTTON_PIN      5    // C3 default (Config A); use 17 for WROOM (Config B)
+// firmware/mobile/main/board_config.h  (Config B: WROOM-32 as Mobile)
+#define ANT_OLED_SDA_PIN    21   // WROOM; C3 (Config A default) is 8
+#define ANT_OLED_SCL_PIN    22   // WROOM; C3 (Config A default) is 9
+#define ANT_BUTTON_PIN      17   // WROOM; C3 (Config A default) is 5
 ```
 
 Then re-run `idf.py set-target <target>` and `idf.py build`. Use `esp32` for the WROOM-32, `esp32c3` for the C3.
