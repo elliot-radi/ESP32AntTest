@@ -43,8 +43,8 @@ profiles/
   bad_antenna.json        # synthetic antenna profile (ceramic, deep null)
 firmware/
   mobile/                  # PLANNED — empty (no CMakeLists, no main/, no board_config.h)
-  station/                 # SKELETON — CMakeLists + main/main.c (banner+self-test) + partitions.csv + components/ant_shared
-    partitions.csv         # 4 MB flash, no OTA, 1 MB LittleFS logs (subtype 0x82)
+  station/                 # INCREMENT 1 — serial protocol + session + LittleFS (no RF yet)
+                           #   see firmware/NOTES.md for build workflow + gotchas hit
   hwtest/                  # IMPLEMENTED — C3 board bring-up (I2C scan + OLED + button), verified on HW
                            #   components/oled_text vendored in-repo (SSD1306 text wrapper over esp_lcd)
   shared/
