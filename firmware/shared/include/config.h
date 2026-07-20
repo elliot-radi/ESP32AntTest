@@ -37,8 +37,9 @@
 #define ANT_BTN_DEBOUNCE_MS     20
 
 // OLED + button — Mobile-side pins. Override in board_config.h.
-// Defaults below are for ESP32-WROOM-32 as Mobile (Config A).
-// For ESP32-C3 as Mobile (Config B): SDA=8, SCL=9, Button=5.
+// Mobile-side pins. Config A (default) = C3 as Mobile; Config B = WROOM-32
+// as Mobile. #defines below are the WROOM (Config B) fallback; C3 (Config A)
+// overrides in board_config.h: SDA=8, SCL=9, Button=5.
 #ifndef ANT_OLED_I2C_ADDR
 #define ANT_OLED_I2C_ADDR       0x3C    // SSD1306; some modules use 0x3D
 #endif

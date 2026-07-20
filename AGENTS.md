@@ -90,7 +90,7 @@ button gestures, beacon TX/RX, RAM outage buffer); then `tools/server.py`.
   See [ADR-002](docs/ADR-002-protocol-stack.md).
 - **Toolchain** — ESP-IDF v5.2+, plain C, `idf.py` CLI. See [ADR-003](docs/ADR-003-toolchain.md).
 - **Roles/boards** — `ROLE_MOBILE`/`ROLE_STATION` flags; Config A (default):
-  Mobile=WROOM-32, Station=C3. Pin maps board-keyed in `board_config.h`.
+  Mobile=C3, Station=WROOM-32. Pin maps board-keyed in `board_config.h`.
   See [SPEC §2.1](docs/SPEC.md).
 - **TX power units** — dBm everywhere; convert to 0.25 dBm only at the
   `esp_wifi_set_max_tx_power()` call via `ANT_DBM_TO_IDF()`. C3 clamps 2→~3.

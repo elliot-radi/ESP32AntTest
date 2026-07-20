@@ -121,8 +121,8 @@ Two role-to-board assignments are supported. The choice is made at compile time 
 
 | Config | Mobile board | Station board | Mobile pins (SDA / SCL / Button) |
 |--------|-------------|---------------|----------------------------------|
-| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 | 21 / 22 / 17 |
-| **B** | ESP32-C3 | ESP32-WROOM-32 | 8 / 9 / 5 |
+| **A** (current default) | ESP32-C3 | ESP32-WROOM-32 | 8 / 9 / 5 |
+| **B** | ESP32-WROOM-32 | ESP32-C3 | 21 / 22 / 17 |
 
 Both configurations are functionally equivalent — the RF behavior (Station as SoftAP, Mobile as STA in Mode A; symmetric ESP-NOW peers in Mode B) is role-based, not chip-based.
 
@@ -150,9 +150,9 @@ To switch configurations or substitute a different board variant, edit `board_co
 
 ```c
 // firmware/mobile/main/board_config.h
-#define ANT_OLED_SDA_PIN    21   // WROOM default; use 8 for C3
-#define ANT_OLED_SCL_PIN    22   // WROOM default; use 9 for C3
-#define ANT_BUTTON_PIN      17   // WROOM default; use 5 for C3
+#define ANT_OLED_SDA_PIN    8    // C3 default (Config A); use 21 for WROOM (Config B)
+#define ANT_OLED_SCL_PIN    9    // C3 default (Config A); use 22 for WROOM (Config B)
+#define ANT_BUTTON_PIN      5    // C3 default (Config A); use 17 for WROOM (Config B)
 ```
 
 Then re-run `idf.py set-target <target>` and `idf.py build`. Use `esp32` for the WROOM-32, `esp32c3` for the C3.

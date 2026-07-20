@@ -32,7 +32,7 @@ A button gesture: button held ≥ 1500 ms. Used as Select / Confirm in the UI.
 A test mode in which each button press triggers one Burst. Used for range-walk scenarios where the user moves the Mobile and captures data at each stop.
 
 **Mobile**  
-The handheld board. Runs the OLED display, button UI, and session control logic. Initiates all ping exchanges. Default hardware: ESP32-WROOM-32 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
+The handheld board. Runs the OLED display, button UI, and session control logic. Initiates all ping exchanges. Default hardware: ESP32-C3 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
 
 **Mode A — WiFi Peer**  
 RF mode where Station acts as SoftAP and Mobile connects as STA. No external router. RSSI obtained via native ESP-IDF WiFi API on both sides.
@@ -74,7 +74,7 @@ A button gesture: button pressed and released in < 500 ms. Used for Scroll / Nex
 Software Access Point. One board acts as an access point in firmware. In Mode A, Station is the SoftAP; Mobile connects to it as a WiFi client (STA). No wired uplink is needed.
 
 **Station**  
-The stationary board. Responds to pings, measures uplink RSSI, logs data to LittleFS and serial. Default hardware: ESP32-C3 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
+The stationary board. Responds to pings, measures uplink RSSI, logs data to LittleFS and serial. Default hardware: ESP32-WROOM-32 (Config A); configurable, see [HARDWARE.md](HARDWARE.md).
 
 **STA (WiFi Station mode)**  
 Standard WiFi client mode. In Mode A, Mobile is the STA, connecting to Station's SoftAP.

@@ -44,8 +44,8 @@ The Mobile and Station roles are decoupled from the physical board — either th
 
 | Config | Mobile | Station |
 |--------|--------|---------|
-| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 |
-| **B** | ESP32-C3 | ESP32-WROOM-32 |
+| **A** (current default) | ESP32-C3 | ESP32-WROOM-32 |
+| **B** | ESP32-WROOM-32 | ESP32-C3 |
 
 Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#define ROLE_STATION` flag in `shared/config.h`, making the firmware portable across board variants. Board-specific GPIO pin assignments are isolated in `mobile/board_config.h` and `station/board_config.h` (see [HARDWARE.md](HARDWARE.md) for both boards' pin maps).
 
@@ -369,18 +369,18 @@ The Mobile does not require wall time. A real-time clock (e.g. DS3231 on I2C) is
 
 ```bash
 cd firmware/mobile
-idf.py set-target esp32        # Config A (WROOM); use esp32c3 for Config B
+idf.py set-target esp32c3      # Config A (C3); use esp32 for Config B
 idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor
+idf.py -p /dev/ttyACM0 flash monitor
 ```
 
 ### Build Station
 
 ```bash
 cd firmware/station
-idf.py set-target esp32c3      # Config A (C3); use esp32 for Config B
+idf.py set-target esp32        # Config A (WROOM); use esp32c3 for Config B
 idf.py build
-idf.py -p /dev/ttyACM0 flash monitor
+idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
 > **Serial device nodes:** the ESP32-WROOM-32 dev module exposes a USB-UART
