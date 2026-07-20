@@ -1,10 +1,18 @@
 # ESP32AntTest — Hardware Guide
 
-ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + button, battery) and **Station** role (USB-serial logging, LittleFS) are decoupled from the physical board — either the ESP32-C3 or the ESP32-WROOM-32 can fill either role. The assignment is a compile-time choice; see [Configurations](#configurations) below.
+ESP32AntTest uses two ESP32 development boards. The **Station** role (USB-serial logging, LittleFS) and **Mobile** role (OLED + button, battery) are decoupled from the physical board — either  the ESP32-WROOM-32 or the ESP32-C3 can fill either role. The assignment is a compile-time choice; see [Configurations](#configurations) below.
 
 ---
 
 ## Boards
+
+### ESP32-WROOM-32 Dev Module
+
+| Item | Notes |
+|------|-------|
+| Chip | ESP32-WROOM-32, dual-core Xtensa, 2.4 GHz |
+| Antenna | FPC antenna (adhered to PCB) |
+| USB | Micro-USB via USB-UART bridge (CP2102/CH340) → `/dev/ttyUSB*` (38-pin or 30-pin variant) |
 
 ### ESP32-C3 Dev Module
 
@@ -14,14 +22,6 @@ ESP32AntTest uses two ESP32 development boards. The **Mobile** role (OLED + butt
 | Board | ESP32-C3-Zero / SuperMini (pinout in `refs/ESP32-C3-Zero_pinout.webp`) |
 | Antenna | Ceramic PCB antenna (onboard) |
 | USB | USB-C; **native USB JTAG/serial** (no UART bridge) → `/dev/ttyACM*` |
-
-### ESP32-WROOM-32 Dev Module
-
-| Item | Notes |
-|------|-------|
-| Chip | ESP32-WROOM-32, dual-core Xtensa, 2.4 GHz |
-| Antenna | FPC antenna (adhered to PCB) |
-| USB | Micro-USB via USB-UART bridge (CP2102/CH340) → `/dev/ttyUSB*` (38-pin or 30-pin variant) |
 
 ---
 
@@ -47,31 +47,7 @@ Pin assignments are keyed to the **board**, not the role, so they remain valid i
 
 > **Note:** The OLED modules on hand use I2C address **`0x3C`** (confirmed, set as the default in `shared/config.h` as `ANT_OLED_I2C_ADDR`). Some SSD1306 modules use `0x3D` instead — if you swap in a different module, run an I2C scanner sketch to verify and override `ANT_OLED_I2C_ADDR` in `board_config.h`.
 
- ### Wiring diagram - ESP32-WROOM-32 as Mobile                                           
-                                                                 
- ```                                                                    
- ┌─────────────────────────────┐         ┌─────────────────────┐ 
- │   ESP32-WROOM-32            │         │   SSD1306 OLED      │
- │                             │         │                     │
- │                       3V3   ●─────────● VCC                 │ 
- │                       GND   ●─────────● GND                 │ 
- │                     GPIO21  ●─────────● SDA                 │ 
- │                     GPIO22  ●─────────● SCL                 │ 
- │                             │         └─────────────────────┘
- │                     GPIO17  ●───┐                             
- └─────────────────────────────┘   │                             
-                                   │   3V3                       
-                                   │    │                        
-                                   │   10kΩ (optional)           
-                                   └────┤                        
-                                    ┌───┴────┐                   
-                                    │ BUTTON │                   
-                                    │  (NO)  │                   
-                                    └───┬────┘                   
-                                        │                        
-                                       GND                       
- ```                                                                    
-                                                                 
+                                                                  
  ### Wiring diagram - ESP32-C3 as Mobile                                                 
                                                                  
  ```                                                                    
@@ -97,6 +73,30 @@ Pin assignments are keyed to the **board**, not the role, so they remain valid i
                                        GND                       
  ```
 
+### Wiring diagram - ESP32-WROOM-32 as Mobile                                           
+                                                                 
+ ```                                                                    
+ ┌─────────────────────────────┐         ┌─────────────────────┐ 
+ │   ESP32-WROOM-32            │         │   SSD1306 OLED      │
+ │                             │         │                     │
+ │                       3V3   ●─────────● VCC                 │ 
+ │                       GND   ●─────────● GND                 │ 
+ │                     GPIO21  ●─────────● SDA                 │ 
+ │                     GPIO22  ●─────────● SCL                 │ 
+ │                             │         └─────────────────────┘
+ │                     GPIO17  ●───┐                             
+ └─────────────────────────────┘   │                             
+                                   │   3V3                       
+                                   │    │                        
+                                   │   10kΩ (optional)           
+                                   └────┤                        
+                                    ┌───┴────┐                   
+                                    │ BUTTON │                   
+                                    │  (NO)  │                   
+                                    └───┬────┘                   
+                                        │                        
+                                       GND                       
+ ```                                                                    
 
 For software debounce only (no RC filter), simply wire the button between the chosen GPIO and GND. Internal pull-up is enabled via `gpio_set_pull_mode(ANT_BUTTON_PIN, GPIO_PULLUP_ONLY)`.
 
@@ -119,10 +119,10 @@ The Station board requires no external peripherals — only a USB cable for powe
 
 Two role-to-board assignments are supported. The choice is made at compile time via the `ROLE_MOBILE` / `ROLE_STATION` flag in `shared/config.h` (see [SPEC §2.1](SPEC.md)) and the `idf.py set-target` called in each firmware directory.
 
-| Config | Mobile board | Station board | Mobile pins (SDA / SCL / Button) |
-|--------|-------------|---------------|----------------------------------|
-| **A** (current default) | ESP32-C3 | ESP32-WROOM-32 | 8 / 9 / 5 |
-| **B** | ESP32-WROOM-32 | ESP32-C3 | 21 / 22 / 17 |
+| Config | Station board | Mobile board | Mobile pins (SDA / SCL / Button) |
+|--------|--------------|-------------|----------------------------------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 | 8 / 9 / 5 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 | 21 / 22 / 17 |
 
 Both configurations are functionally equivalent — the RF behavior (Station as SoftAP, Mobile as STA in Mode A; symmetric ESP-NOW peers in Mode B) is role-based, not chip-based.
 
