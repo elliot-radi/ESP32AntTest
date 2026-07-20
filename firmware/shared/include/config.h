@@ -10,11 +10,14 @@
 #define ANT_STATION_IP          "192.168.26.1"
 #define ANT_UDP_PORT            5432
 
-// Measurement
-#define ANT_BURST_SIZE          10        // pings per Manual burst
-#define ANT_AUTO_INTERVAL_MS    5000      // Auto mode sample period
-#define ANT_PING_TIMEOUT_MS     2000      // ms before a ping is TIMEOUT
-#define ANT_LOSS_THRESHOLD      5         // consecutive timeouts = link lost
+// Sampling (beacon mode) — see ADR-004
+#define ANT_BEACON_HZ           5         // both boards beacon at this rate
+#define ANT_DISPLAY_HZ          2         // OLED live-RSSI refresh (Mobile quick-check/active)
+#define ANT_AUTO_INTERVAL_MS    5000      // ad-hoc Auto sample period
+#define ANT_LOSS_THRESHOLD      5         // consecutive seconds no decode = link lost
+
+// Serial (host<->Station — see SERIAL_PROTOCOL.md §1)
+#define ANT_SERIAL_BAUD         115200
 
 // TX power options in dBm (user-facing / packet / log units).
 // esp_wifi_set_max_tx_power() takes 0.25 dBm units — use ANT_DBM_TO_IDF().
@@ -49,6 +52,9 @@
 #define ANT_BUTTON_PIN          17
 #endif
 
-// LittleFS
+// Mobile outage buffer (RAM ring buffer; no LittleFS on Mobile — see ADR-004)
+#define ANT_MOB_BUFFER_MAX      4096    // ~ worst-case long-walk backlog (markers + RSSI)
+
+// Station LittleFS (durable fallback — streams over serial AND mirrors to flash)
 #define ANT_LOG_MOUNT_POINT     "/logs"
 #define ANT_LOG_MAX_FILES       5

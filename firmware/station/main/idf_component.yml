@@ -1,0 +1,8 @@
+## ESP32AntTest — Station main component dependencies
+## Managed components pulled by the IDF component manager.
+## See ADR-003 (ESP-IDF native) + SPEC §2.3 (Station LittleFS durable fallback).
+##
+## LittleFS port for ESP-IDF. Used by logger.c for the durable session-log
+## partition (subtype 0x82 in partitions.csv). Pinned to ^1.20 (IDF v5.2 compatible).
+dependencies:
+  joltwallet/littlefs: "^1.20"
