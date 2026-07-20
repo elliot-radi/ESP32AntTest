@@ -10,10 +10,11 @@ Test and compare antenna types, orientations, and transmit power settings betwee
 
 Two ESP32 dev boards (an ESP32-C3 and an ESP32-WROOM-32) fill the Mobile and Station roles. The role-to-board mapping is a compile-time choice — either board can fill either role (see [docs/HARDWARE.md](docs/HARDWARE.md)):
 
-| Config | Mobile | Station |
-|--------|--------|---------|
-| **A** (current default) | ESP32-C3 | ESP32-WROOM-32 |
-| **B** | ESP32-WROOM-32 | ESP32-C3 |
+| Config | Station | Mobile |
+|--------|---------|--------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 |
+
 
 | Role | Peripherals | Power |
 |------|-------------|-------|

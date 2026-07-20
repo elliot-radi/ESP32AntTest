@@ -42,10 +42,10 @@ The primary use cases are:
 
 The Mobile and Station roles are decoupled from the physical board — either the ESP32-C3 or the ESP32-WROOM-32 can fill either role. The assignment is a compile-time choice:
 
-| Config | Mobile | Station |
-|--------|--------|---------|
-| **A** (current default) | ESP32-C3 | ESP32-WROOM-32 |
-| **B** | ESP32-WROOM-32 | ESP32-C3 |
+| Config | Station | Mobile |
+|--------|---------|--------|
+| **A** (current default) | ESP32-WROOM-32 | ESP32-C3 |
+| **B** | ESP32-C3 | ESP32-WROOM-32 |
 
 Role assignment is determined at compile time via a `#define ROLE_MOBILE` / `#define ROLE_STATION` flag in `shared/config.h`, making the firmware portable across board variants. Board-specific GPIO pin assignments are isolated in `mobile/board_config.h` and `station/board_config.h` (see [HARDWARE.md](HARDWARE.md) for both boards' pin maps).
 
