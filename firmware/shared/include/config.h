@@ -13,8 +13,9 @@
 // Sampling (beacon mode) — see ADR-004
 #define ANT_BEACON_HZ           5         // both boards beacon at this rate
 #define ANT_DISPLAY_HZ          2         // OLED live-RSSI refresh (Mobile quick-check/active)
-#define ANT_AUTO_INTERVAL_MS    5000      // ad-hoc Auto sample period
 #define ANT_LOSS_THRESHOLD      5         // consecutive seconds no decode = link lost
+/* ANT_AUTO_INTERVAL_MS removed — ad-hoc Auto is out of scope (SPEC DI-11).
+ * Time-soak is host-guided continuous beacon logging, not a second timer. */
 
 // Serial (host<->Station — see SERIAL_PROTOCOL.md §1)
 #define ANT_SERIAL_BAUD         115200

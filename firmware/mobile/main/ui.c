@@ -13,17 +13,16 @@ static ui_screen_t s_screen = UI_SCREEN_QUICKCHECK;
 static int         s_menu_idx = 0;
 static bool        s_oled_ok = false;
 
-/* Menu items (top-level). */
+/* Menu items (top-level). Logged sessions are host-started (SPEC §3.3/DI-11);
+ * no ad-hoc Manual/Auto entry. */
 enum {
-    MENU_SESSION_ADHOC = 0,
-    MENU_MODE,
+    MENU_MODE = 0,
     MENU_TX,
     MENU_END_SESSION,
     MENU_BACK,
     MENU_N
 };
 static const char *s_menu_labels[MENU_N] = {
-    "New ad-hoc Manual",
     "Mode",
     "TX Power",
     "End Session",
@@ -112,7 +111,7 @@ bool ui_handle_button(btn_evt_t evt)
             return true;
         }
         if (evt == BTN_EVT_SHORT) {
-            /* Advance (guided next step / ad-hoc bump). */
+            /* Ready / next guided step. */
             ant_mrf_on_short_press();
             return true;
         }
@@ -144,10 +143,6 @@ bool ui_handle_button(btn_evt_t evt)
         }
         if (evt == BTN_EVT_LONG) {
             switch (s_menu_idx) {
-            case MENU_SESSION_ADHOC:
-                ant_mrf_start_adhoc_manual();
-                s_screen = UI_SCREEN_SESSION;
-                break;
             case MENU_MODE:
                 toggle_mode();
                 break;

@@ -162,7 +162,7 @@ General IDF items also live in the `esp-idf-build` skill.
 - **Host TX power** — `start_session` `tx_sta` → Station `esp_wifi_set_max_tx_power`
   (logged after IDF clamp, often 20→~17). `tx_mob` is commanded on every
   `PKT_PROTOCOL` frame (`tx_power` field = Mobile dBm, **not** Station TX).
-  Mobile applies before guided/ad-hoc recording. Empty JSON still gets one
+  Mobile applies before guided recording. Empty JSON still gets one
   setup chunk so power-only sessions work. CSV `tx_mob` comes from Mobile's
   beacon `tx_power` after apply (verify with `tx_mob=2` → rows show `2`).
 - **ESP-NOW session switch** — do **not** flip Station to ESPNOW before

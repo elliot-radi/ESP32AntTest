@@ -48,7 +48,7 @@ static ant_mode_t s_mode = ANT_MODE_WIFI;
 /* Deferred mode from PKT_PROTOCOL (applied outside RF lock / recv cb). */
 static volatile ant_mode_t s_pending_mode = 0; /* 0 = none */
 static bool       s_running = false;
-static bool       s_recording = false;   /* ad-hoc or guided session */
+static bool       s_recording = false;   /* host-guided session logging active */
 static bool       s_guided    = false;   /* true if host protocol loaded */
 static bool       s_step_active = false; /* true after operator pressed ready on current step */
 static int8_t     s_tx_dbm = ANT_DEFAULT_TX_POWER;
@@ -192,32 +192,16 @@ static void apply_session_setup_from_protocol(const ant_packet_t *hdr,
             ui_set_recording(true);
             apply_guide_step_ui(guide_current());
         } else {
-            ESP_LOGW(TAG, "protocol JSON present but no steps — ad-hoc");
-            s_recording = true;
-            s_guided = false;
-            if (s_step_id == 0) s_step_id = 1;
-            s_step_active = true;
-            ui_set_recording(true);
-            ui_set_step(s_step_id);
-            ui_show(UI_SCREEN_SESSION);
+            ESP_LOGW(TAG, "protocol JSON present but no steps — wait for host");
+            /* Do not open a protocol-free recorded session (SPEC DI-11). */
         }
     } else {
-        /* Empty payload: if host is parking us back on WIFI (session end),
-         * stop recording. If commanding ESPNOW or already WIFI with no
-         * protocol, treat as ad-hoc record only when not yet recording. */
+        /* Empty payload: session end (mode→WIFI) stops recording; other
+         * empty setup does not start an ad-hoc log (SPEC DI-11). */
         bool to_wifi = hdr && hdr->step_id == (uint16_t)ANT_MODE_WIFI;
         if (to_wifi && s_recording) {
             ESP_LOGI(TAG, "session teardown setup (WIFI, no JSON) — stop record");
             ant_mrf_end_session();
-        } else if (!s_recording) {
-            ESP_LOGI(TAG, "session setup without guided steps — recording on");
-            s_recording = true;
-            s_guided = false;
-            if (s_step_id == 0) s_step_id = 1;
-            s_step_active = true;
-            ui_set_recording(true);
-            ui_set_step(s_step_id);
-            ui_show(UI_SCREEN_SESSION);
         }
     }
 }
@@ -764,21 +748,6 @@ int ant_mrf_set_tx_power(int8_t dbm)
 
 int8_t ant_mrf_get_tx_power_dbm(void) { return s_tx_dbm; }
 
-void ant_mrf_start_adhoc_manual(void)
-{
-    guide_clear();
-    s_recording = true;
-    s_guided = false;
-    s_step_active = true;
-    s_step_id = 1;
-    s_session_wire = (uint32_t)(esp_timer_get_time() / 1000000);
-    ui_set_recording(true);
-    ui_set_step(s_step_id);
-    ui_set_guide(NULL);
-    ui_show(UI_SCREEN_SESSION);
-    ESP_LOGI(TAG, "ad-hoc manual session start step=1");
-}
-
 void ant_mrf_end_session(void)
 {
     s_recording = false;
@@ -793,44 +762,34 @@ void ant_mrf_end_session(void)
     ESP_LOGI(TAG, "session end");
 }
 
-/* Short-press semantics:
- *   guided + not yet "ready" on this step  → mark ready, show live SESSION
- *   guided + ready                        → advance to next step (or done)
- *   ad-hoc                                → bump run counter + PKT_MARKER
+/* Short-press semantics (guided only; SPEC DI-11):
+ *   not yet "ready" on this step → mark ready, show live SESSION
+ *   already ready                 → advance to next step (or done)
  */
 bool ant_mrf_on_short_press(void)
 {
-    if (!s_recording) return false;
+    if (!s_recording || !s_guided) return false;
 
-    if (s_guided) {
-        if (!s_step_active) {
-            /* Ready on current step — switch to live RSSI for sampling. */
-            s_step_active = true;
-            ui_show(UI_SCREEN_SESSION);
-            /* Marker announces the step is now the active sample window. */
-            send_marker_now();
-            ESP_LOGI(TAG, "step %u ready", (unsigned)s_step_id);
-            return true;
-        }
-        /* Advance to next guided step. */
-        const guide_step_t *next = guide_advance();
-        if (!next) {
-            ESP_LOGI(TAG, "protocol complete");
-            ui_set_guide("DONE - long=end");
-            ui_show(UI_SCREEN_GUIDE);
-            s_step_active = false;
-            /* Leave recording on until operator ends; Station keeps logging. */
-            return true;
-        }
-        apply_guide_step_ui(next);
+    if (!s_step_active) {
+        /* Ready on current step — switch to live RSSI for sampling. */
+        s_step_active = true;
+        ui_show(UI_SCREEN_SESSION);
+        /* Marker announces the step is now the active sample window. */
+        send_marker_now();
+        ESP_LOGI(TAG, "step %u ready", (unsigned)s_step_id);
         return true;
     }
-
-    /* Ad-hoc: bump run counter + marker. */
-    s_step_id++;
-    ui_set_step(s_step_id);
-    send_marker_now();
-    ESP_LOGI(TAG, "ad-hoc advance -> step %u", s_step_id);
+    /* Advance to next guided step. */
+    const guide_step_t *next = guide_advance();
+    if (!next) {
+        ESP_LOGI(TAG, "protocol complete");
+        ui_set_guide("DONE - long=end");
+        ui_show(UI_SCREEN_GUIDE);
+        s_step_active = false;
+        /* Leave recording on until host ends; Station keeps logging. */
+        return true;
+    }
+    apply_guide_step_ui(next);
     return true;
 }
 

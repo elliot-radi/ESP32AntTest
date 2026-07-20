@@ -4,12 +4,6 @@ Terms used consistently throughout this project's documentation, code, and logs.
 
 ---
 
-**Auto Mode**  
-An ad-hoc (protocol-free) test mode for time-soak scenarios: one start/stop
-sequence is one Run, during which beacons are logged continuously. No
-protocol is loaded; `step_id` is an incrementing run counter. Contrast with
-guided sessions run from the host browser. See [SPEC §3.3](SPEC.md).
-
 **Beacon**  
 A `PKT_BEACON` packet transmitted autonomously by each board at a fixed rate
 (default 5 Hz). Each beacon piggybacks `rssi_local` — the sender's freshest
@@ -39,12 +33,6 @@ expected (`beacon_hz × step_duration`). See [SPEC §5.3](SPEC.md).
 
 **Long Press**  
 A button gesture: button held ≥ 1500 ms. Used as Select / Confirm in the UI.
-
-**Manual Mode**  
-An ad-hoc (protocol-free) test mode for range-walk scenarios: a button press
-starts/stops a Run, and beacons accumulate while the run is active. No
-protocol is loaded; `step_id` is an incrementing run counter. See
-[SPEC §3.3](SPEC.md).
 
 **Mobile**  
 The handheld board. Runs the OLED display, button UI, and session control
@@ -76,9 +64,8 @@ RSSI of Mobile's beacon as measured at the Station board. Represents the uplink 
 
 **Run**  
 A contiguous sequence of beacon samples at one position or configuration,
-logged as a group. In guided mode a run maps 1:1 to a protocol step (join
-key `step_id`); in ad-hoc Manual/Auto, `step_id` is an incrementing run
-counter. See [SPEC §3.2](SPEC.md).
+logged as a group. Maps 1:1 to a protocol step (join key `step_id`). See
+[SPEC §3.2](SPEC.md).
 
 **Session**  
 A named collection of Runs sharing a common setup (antenna configuration, board pair, test objective). Identified by a timestamp-based ID. Stored as one CSV file on Station's LittleFS.
@@ -99,7 +86,11 @@ it to LittleFS as the durable fallback. Default hardware: ESP32-WROOM-32
 Standard WiFi client mode. In Mode A, Mobile is the STA, connecting to Station's SoftAP.
 
 **Time Soak**  
-A test scenario in which the two boards are placed at a fixed location and Auto Mode records signal quality over an extended period (minutes to hours) to observe temporal variation from interference, multipath, and environmental changes.
+A host-guided test scenario: boards stay at a fixed placement while a session
+logs continuous beacons for a planned interval (protocol `soak` with
+`duration_s`, or a long `free` step). Value is on the host — RSSI-vs-time
+(and related) plots after the session, not a Mobile-local "Auto" sampler.
+See [SPEC §3.2–3.3](SPEC.md).
 
 **TX Power**  
 Transmit power of the WiFi/ESP-NOW radio, set via `esp_wifi_set_max_tx_power()`. Expressed in dBm. User-selectable from the Mobile menu: 2, 10, 17, or 20 dBm. Both boards' TX power values are included in every logged record.

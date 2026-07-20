@@ -1,8 +1,8 @@
 # ESP32AntTest — System Specification
 
-**Version:** 0.3.0-draft  
-**Status:** Pre-implementation (design validated via synthetic-data mockup)  
-**Last Updated:** 2026-07-09
+**Version:** 0.3.1-draft  
+**Status:** Implementation in progress (design validated via synthetic-data mockup)  
+**Last Updated:** 2026-07-20
 
 ---
 
@@ -33,6 +33,7 @@ The primary use cases are:
 - **Noise-floor / SNR measurement** (RSSI + packet-loss rate is sufficient for antenna comparison at matched TX power; the ESP32 has no clean noise-floor API — see ADR-001 addendum)
 - Battery circuitry / RTC hardware on Mobile (USB-powered; wall clock via host serial injection — see [Time Source](#time-source))
 - Sleep modes between samples (future enhancement)
+- **Ad-hoc / protocol-free logged sessions on Mobile** (Manual range-walk or Auto timed soak without a host protocol). Logged characterization is always a **host-started guided session**; antenna go/no-go without a log is **Quick-Check** only. Time-soak is a guided `soak` (or long `free`) step with host analysis — see §3.2–3.3.
 
 ---
 
@@ -121,21 +122,21 @@ A **protocol** (a.k.a. test definition) is an ordered list of **steps** authored
 |-----------|--------|---------|
 | `distance` | `distance_m` | Range-walk point |
 | `orientation` | `axis` (X/Y/Z), `angle_deg` | Single-axis rotation point (radiation-pattern sweep) |
-| `soak` | `duration_s` | Time-soak interval |
-| `free` | — | Ad-hoc marker (no condition) |
+| `soak` | `duration_s` | **Time-soak:** boards stay fixed; continuous beacons for `duration_s` (host may prompt and/or end the step). Analysis is RSSI-vs-time on the host — not a separate Mobile "Auto" mode |
+| `free` | — | Unconditioned step (marker / generic hold); useful for open-ended host scenarios |
 
 A **session** is an instance of a protocol executed between the two boards. Each session has:
 
 - A session ID (timestamp-based, e.g. `20260703_143022`)
-- The protocol being run (or null for ad-hoc Manual/Auto)
+- The protocol being run (required for any logged session)
 - RF mode (WiFi / ESP-NOW)
 - TX power setting for each board
 
-A **run** maps 1:1 to a protocol step (in guided mode). In the log, the join key is `step_id` (the protocol step's id). In ad-hoc Manual/Auto (no protocol), `step_id` is simply an incrementing run counter.
+A **run** maps 1:1 to a protocol step. In the log, the join key is `step_id` (the protocol step's id).
 
 ### 3.3 Test Modes
 
-The firmware has two top-level operating modes:
+The product has two operator-facing modes. **All logged characterization is guided** (host protocol + session). There is no protocol-free Manual/Auto log path on Mobile (see §1 Out of Scope).
 
 #### Quick-Check (default power-up state)
 
@@ -146,17 +147,13 @@ The firmware has two top-level operating modes:
 
 #### Guided Session (formal logged test)
 
-- Host webserver authors/loads a protocol → transferred to Station → forwarded to Mobile (once per session, out-of-band from beacons).
-- Mobile walks the operator through each step on the OLED (the **test-guide**): e.g. *"Rotate Z +45°, press when ready: Z-135°"* or *"Increase distance 5m, press when ready: 15m"*.
-- Button press advances to the next step; the press is logged as a **marker** (buffered on Mobile if out of range, forwarded on reconnect).
-- Station logs every decoded beacon, tagged with the active `step_id`.
-- Session can be ended from the host browser (always) or from Mobile (long-press) if in range.
-
-#### Ad-hoc Manual / Auto (protocol-free fallback)
-
-- **Manual (range walk):** button press starts/stops a run; samples accumulate while active.
-- **Auto (time soak):** auto-sample at `ANT_AUTO_INTERVAL_MS`; one start/stop = one run.
-- Used when no host/protocol is available; `step_id` is an incrementing run counter. No test-guide prompts.
+- Host tool authors/loads a protocol → transferred to Station over serial → forwarded to Mobile over RF (`PKT_PROTOCOL`, once per session / on rejoin, out-of-band from beacons).
+- Mobile walks the operator through each step on the OLED (the **test-guide**): e.g. *"Rotate Z +45°, press when ready: Z-135°"*, *"Walk to 15 m, press when ready"*, or a soak prompt *"Leave in place for 10 min"*.
+- **Range walk** and **orientation** sweeps = ordered `distance` / `orientation` steps + short-press ready/advance (markers).
+- **Time soak** = one (or more) `soak`/`free` steps under a host session; both boards already beacon continuously at `ANT_BEACON_HZ`, so the host simply leaves the session open and later plots RSSI vs time. No second sampling clock on Mobile.
+- Button short-press marks ready / advances to the next step; the press is a **marker** (buffered on Mobile if out of range, forwarded on reconnect).
+- Station logs every decoded beacon (and outage merges), tagged with the active `step_id`, streams `>` rows to the host, and mirrors to LittleFS.
+- Session end is primarily from the host tool; Mobile long-press may end if in range (implementation detail).
 
 ### 3.4 Mobile UI
 
@@ -164,21 +161,20 @@ Single button with three gesture types:
 
 | Gesture | Definition | Action |
 |---------|-----------|--------|
-| Short press | < 500 ms | Scroll / Next (in menus) or **advance to next protocol step** (in guided mode) |
-| Long press | ≥ 1500 ms | Select / Confirm |
+| Short press | < 500 ms | Scroll / Next (in menus) or **ready / next protocol step** (in guided mode) |
+| Long press | ≥ 1500 ms | Select / Confirm / open menu |
 | Double press | Two presses < 400 ms apart | Back / Cancel |
 
-#### Menu Tree (Quick-Check ↔ Guided ↔ Ad-hoc)
+#### Menu Tree (Quick-Check ↔ status; sessions are host-started)
 
 ```
 [QUICK-CHECK]  ──long press──►  [MENU]
-  live RSSI, no log                ├── Session ──── [New (guided)] | [New (ad-hoc Manual)] | [New (ad-hoc Auto)]
-                                   ├── Mode ─────── [WiFi] | [ESP-NOW]
-                                   ├── TX Power ─── [2|10|17|20 dBm]
-                                   └── End Session
+  live RSSI, no log                ├── Mode ─────── [WiFi] | [ESP-NOW]     (local RF preference / override)
+                                   ├── TX Power ─── [2|10|17|20 dBm]       (overridden by host session when active)
+                                   └── End Session                         (if a host session is active)
 ```
 
-In Guided mode the OLED shows the **test-guide** for the current step (prompt + condition); a short press advances. In Quick-Check the OLED shows live RSSI.
+Logged sessions are **not** started from a Mobile "New session" submenu — the host loads a protocol and calls `start_session`. In Guided mode the OLED shows the **test-guide** for the current step (prompt + condition); a short press marks ready / advances. In Quick-Check the OLED shows live RSSI only.
 
 ### 3.5 Mobile Display Layout (128×64)
 
@@ -236,7 +232,7 @@ The `tools/` directory contains the host tooling. A synthetic-data **mockup** (`
 | Field | Type | Description |
 |-------|------|-------------|
 | `session_id` | string | `YYYYMMDD_HHMMSS` of session start |
-| `step_id` | uint16 | Protocol step index (guided) or incrementing run counter (ad-hoc). Join key to the protocol JSON. |
+| `step_id` | uint16 | Protocol step id (join key to the protocol JSON). |
 | `seq` | uint32 | Beacon sequence number |
 | `timestamp_ms` | uint64 | ms since Station boot (monotonic) |
 | `datetime` | string | Local wall-clock `YYYY-MM-DDTHH:MM:SS` of the sample (empty if no time set at boot) |
@@ -304,7 +300,6 @@ typedef enum {
 // Sampling (beacon mode)
 #define ANT_BEACON_HZ          5          // both boards beacon at this rate
 #define ANT_DISPLAY_HZ         2          // OLED live-RSSI refresh (quick-check/active)
-#define ANT_AUTO_INTERVAL_MS   5000       // ad-hoc Auto sample period
 #define ANT_LOSS_THRESHOLD     5          // consecutive seconds no decode = link lost
 
 // TX power options in dBm (user-facing / packet / log units).
@@ -442,9 +437,10 @@ The production webserver (`tools/server.py`) will reuse the `analyze.py` logic a
 | DI-05 | Noise floor / SNR | **Out of scope.** RSSI + loss rate suffices for antenna comparison; no clean ESP32 noise-floor API. |
 | DI-06 | Retries | **None.** Loss inferred from count vs expected; retries would bias range data. |
 | DI-07 | Host-side tool | **First-class deliverable**, not a side-quest: local FastAPI + matplotlib + vanilla JS webserver for protocol authoring, session execution, live view, results/plots. No cloud. |
-| DI-08 | Default power-up behavior | **Quick-Check mode**: auto-connect WiFi, beacon, display live RSSI, no log. Guided session via browser; ad-hoc Manual/Auto as protocol-free fallback. |
+| DI-08 | Default power-up behavior | **Quick-Check mode**: auto-connect WiFi, beacon, display live RSSI, no log. Logged tests are **host-guided only** (protocol + `start_session`). |
 | DI-09 | Orientation test type | Added: single-axis sweeps (`axis` + `angle_deg`); polar RSSI-vs-angle plot exposes radiation-pattern asymmetry. Multi-axis (roll/pitch/yaw) deferred. |
 | DI-10 | Protocol entity | Test definition (JSON) authored on host, transferred to boards at session start; `step_id` is the join key. Mobile shows step prompts (test-guide) on OLED. |
+| DI-11 | Ad-hoc Manual/Auto on Mobile | **Out of scope.** Logged work is host protocol + session + host plots. Time-soak = guided `soak`/`free` under host. Quick-Check covers host-free go/no-go. Legacy ad-hoc wording removed 2026-07-20 (v0.3.1). |
 
 ### 9.3 Open Items
 

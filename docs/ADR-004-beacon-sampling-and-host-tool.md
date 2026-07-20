@@ -47,7 +47,9 @@ A local web server on the user's PC (FastAPI + matplotlib + vanilla JS, no build
 
 ### Default power-up: Quick-Check mode
 
-Both boards auto-connect via WiFi (Mode A) and beacon; Mobile displays live RSSI at 2 Hz. No session, no log. This is the "both boards start in Mode A" baseline from ADR-002, elevated to a visible go/no-go feature for winnowing antennas. Guided sessions are entered via the browser; ad-hoc Manual/Auto remain as a protocol-free fallback.
+Both boards auto-connect via WiFi (Mode A) and beacon; Mobile displays live RSSI at 2 Hz. No session, no log. This is the "both boards start in Mode A" baseline from ADR-002, elevated to a visible go/no-go feature for winnowing antennas. Logged / characterized sessions are entered via the host tool (protocol + guided steps), not a protocol-free Mobile menu.
+
+> **Addendum (2026-07-20):** An earlier draft of this ADR (and SPEC §3.3) also listed **ad-hoc Manual/Auto** as a protocol-free fallback on Mobile. That was dropped from product scope: under continuous beacon sampling, Auto adds no sampling model, and Manual without the host never reaches the plot-centric value of the instrument. Time-soak is a **guided/host** scenario (`soak` / long `free` step + host analysis). Quick-Check remains the only host-free path (no log). See SPEC §1 Out of Scope and DI-11.
 
 ### Orientation test type
 
@@ -88,3 +90,4 @@ Considered (Army RF background). Rejected for v1: RSSI + loss rate cleanly discr
 - The log schema gains a `source` (STA/MOB) provenance column; `status` loses `TIMEOUT`.
 - ADR-001's per-mode RSSI API discussion shifts toward per-frame promiscuous reads (needed for true per-beacon RSSI); the averaged native APIs remain an implementation alternative. See ADR-001 addendum.
 - The project deliverable scope grows to include `tools/` (host webserver + analysis); SPEC §1 and §3.7 reflect this.
+- Protocol-free ad-hoc Manual/Auto on Mobile is **not** a consequence of beacon mode and is **out of scope** (see Default power-up addendum).

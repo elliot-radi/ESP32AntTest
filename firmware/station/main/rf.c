@@ -361,8 +361,8 @@ static void send_beacon(void)
 static void send_protocol_chunks(void)
 {
     /* Always emit at least one PKT_PROTOCOL frame so Mobile can apply the
-     * session's tx_mob even when no guided JSON was loaded (ad-hoc host
-     * session, power-only setup). Empty payload = total_len 0. */
+     * session's tx_mob / mode even when JSON forward races or is empty
+     * (session end mode tear-down). Empty payload = total_len 0. */
     const char *json = (s_protocol_json && s_protocol_json[0]) ? s_protocol_json : "";
     uint16_t total = (uint16_t)strlen(json);
     uint16_t offset = 0;

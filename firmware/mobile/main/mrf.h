@@ -12,14 +12,12 @@ int  ant_mrf_set_mode(ant_mode_t mode);
 int  ant_mrf_set_tx_power(int8_t dbm);
 int8_t ant_mrf_get_tx_power_dbm(void);
 
-/* Ad-hoc Manual session (no host protocol): start logging/markers locally. */
-void ant_mrf_start_adhoc_manual(void);
 void ant_mrf_end_session(void);
 
-/* Button short-press in guided/ad-hoc session:
+/* Button short-press in guided session:
  *   - On GUIDE screen (or first press of a step): mark ready → live view.
- *   - On SESSION live view: advance to next protocol step (or bump run
- *     counter if ad-hoc) and emit PKT_MARKER with the new step_id.
+ *   - On SESSION live view: advance to next protocol step and emit
+ *     PKT_MARKER with the new step_id.
  * Returns true if a step advanced / marker was sent. */
 bool ant_mrf_on_short_press(void);
 

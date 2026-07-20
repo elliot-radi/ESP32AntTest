@@ -79,7 +79,7 @@ range produced link_loss/rejoin and dual STA rows, not MOB drain).
 **ESP-NOW:** host `mode=ESPNOW` forwards setup on WiFi first, both sides
 switch — desk dual-RSSI `mode=ESPNOW` rows @ ~5 Hz verified; end_session
 returns Station (and Mobile via setup) to Mode A WiFi. Remaining: outage
-field test (or inject), ad-hoc Auto, `tools/server.py`.
+field test (or inject), `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -90,8 +90,8 @@ field test (or inject), ad-hoc Auto, `tools/server.py`.
 - **Host tool is a first-class deliverable** — local FastAPI + matplotlib +
   vanilla JS webserver; no cloud, no build step. See ADR-004 + [SPEC §3.7](docs/SPEC.md).
 - **Quick-Check is the default power-up** — auto-connect WiFi, beacon,
-  display live RSSI, no log. Guided session via browser; ad-hoc Manual/Auto
-  fallback. See [SPEC §3.3](docs/SPEC.md).
+  display live RSSI, no log. Logged characterization is host-guided only
+  (protocol + session); ad-hoc Manual/Auto out of scope. See [SPEC §3.3](docs/SPEC.md).
 - **RSSI method** — per-beacon RSSI via promiscuous callback (both modes),
   piggybacked. See [ADR-001](docs/ADR-001-rssi-method.md).
 - **Transport** — UDP over SoftAP/STA (Mode A), native ESP-NOW (Mode B).
@@ -180,7 +180,8 @@ into `~/`.
 ## Out of scope
 
 Throughput/latency, >2 boards, 5 GHz, external network/cloud, OTA, noise-floor/SNR,
-battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/SPEC.md).
+battery/RTC hardware, sleep modes, multi-axis orientation, **ad-hoc Manual/Auto**
+(protocol-free Mobile logged sessions). See [SPEC §1](docs/SPEC.md).
 
 ## Current next step
 
@@ -188,7 +189,9 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
    Needs downlink OK + empty/stale Station piggyback >~2 s on Mobile, then
    drain (TX skew `tx_mob`≪`tx_sta` + geometry helps; full SoftAP drop alone
    is not enough). Optional: Station empty-piggyback inject for path checkout.
-2. Ad-hoc Auto (time-soak) on Mobile.
-3. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
+2. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
+
+Ad-hoc Manual/Auto are **out of scope** (SPEC DI-11); do not implement.
+Time-soak = host guided `soak`/`free` + plots.
 
 Update the "Implementation status" line above and this list as work lands.
