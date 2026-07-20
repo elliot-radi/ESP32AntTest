@@ -25,7 +25,7 @@ Espressif device, and `idf.py flash` fails with `Could not open /dev/ttyACM0
 kernel: usb 1-4: USB disconnect, device number 3
 ```
 
-**Cause:** the ESP32-C3-Zero/SuperMini exposes its USB JTAG/serial debug
+**Root cause:** the ESP32-C3-Zero/SuperMini exposes its USB JTAG/serial debug
 unit **natively** (no UART bridge; appears as `/dev/ttyACM*`, vendor:product
 `303a:1001`). A hard reset of the chip — including the RTS pulse esptool
 issues at the end of every `idf.py flash` — drops the USB device and
@@ -33,83 +33,118 @@ re-enumerates it. On re-enumeration the **device number** (`device=N` in the
 USB `bus/device` pair) often increments (3 → 4 → 5 …).
 
 virt-manager's *Add Hardware → USB Host Device* writes the *current* bus and
-device number into the libvirt domain XML as an `<address>` element, so the
-match is pinned to that one enumeration:
+device number into the libvirt domain XML as a host `<address>` element
+inside `<source>`, so the match is pinned to that one enumeration:
 
 ```xml
 <hostdev mode='subsystem' type='usb' managed='yes'>
   <source>
     <vendor  id='0x303a'/>
     <product id='0x1001'/>
-    <address bus='1' device='4'/>   <!-- ← pinned; breaks on re-enumeration -->
+    <address bus='1' device='4'/>   <!-- ← pinned to host bus/device; breaks on re-enumeration -->
   </source>
+  <address type='usb' bus='0' port='4'/>   <!-- guest-side virtual port; stable, unrelated -->
 </hostdev>
 ```
 
-After re-enumeration libvirt is still looking for `bus='1' device='4'`; the
-re-enumerated device is `device='5'`; the match fails and the device
+After re-enumeration libvirt is still looking for host `bus='1' device='4'`;
+the re-enumerated device is `device='5'`; the match fails and the device
 vanishes from the guest until you re-add it.
 
-### Workaround (GUI)
+> **Two `<address>` lines, only one is the problem.** The `<address>` inside
+> `<source>` (no `type=` attribute) is the *host* bus/device — the one that
+> rolls. The `<address type='usb' ...>` *after* `</source>` is the
+> *guest-side* virtual port and is stable; leave it alone.
 
-In virt-manager: remove the stale USB host device, then *Add Hardware → USB
-Host Device* again (it picks up the current device number). This is what the
-GUI forces you into, and it must be repeated whenever the number rolls.
+## Current setup (what works, and what you manage by hand)
 
-### Proper fix (libvirt XML the GUI doesn't expose)
+The accepted operating mode for this project:
 
-On the **host** (not inside the VM — libvirtd is host-side), edit the domain
-XML and drop the `<address>` so the match is by vendor/product only. Then
-re-enumeration (a new device number) no longer breaks it.
+1. **Pass the board through via virt-manager** (*Add Hardware → USB Host
+   Device*). This writes the vendor/product + current host `<address>` into
+   the domain XML and attaches it live.
+2. **Hand-edit the `<source>` to add `startupPolicy='optional'`** (the GUI
+   doesn't expose it). On the host:
 
-```bash
-# on the HOST
-virsh list --all                 # find the domain name
-virsh edit <domain-name>
-```
+   ```bash
+   virsh edit <domain>
+   ```
 
-Find the `<hostdev>` for the board and delete its `<address …/>` line,
-leaving:
+   ```xml
+   <source startupPolicy='optional'>
+     <vendor  id='0x303a'/>
+     <product id='0x1001'/>
+     <address bus='1' device='96'/>
+   </source>
+   ```
 
-```xml
-<hostdev mode='subsystem' type='usb' managed='yes'>
-  <source>
-    <vendor  id='0x303a'/>
-    <product id='0x1001'/>
-  </source>
-</hostdev>
-```
+   `startupPolicy='optional'` means the VM boots even if the board is
+   unplugged (libvirt marks the hostdev `absent='yes'` at boot); when the
+   board *is* plugged in, it attaches normally. This is purely a boot-time
+   robustness tweak — it does **not** affect runtime behavior.
 
-Restart the VM (or `virsh attach-device --live` with the same fragment) to
-apply. With `managed='yes'`, libvirt detaches the device from the host while
-the VM runs and returns it when the VM stops; matching by vendor/product
-alone means the board shows up in the guest regardless of which device
-number it lands on.
+3. **When a flash-induced reset re-enumerates the device and `/dev/ttyACM0`
+   vanishes mid-session:** re-add it from the host. Either:
+   - virt-manager: remove the stale USB host device → *Add Hardware → USB
+     Host Device* (picks up the new device number), or
+   - `virsh reboot <domain>` (libvirt re-resolves vendor/product → bus/device
+     fresh on VM start, so the new number is picked up automatically).
 
-> **Runtime re-attach caveat.** A boot-time hostdev is reliably re-bound on
-> VM start. For a seamless re-attach *while the VM is running* after an
-> in-flight reset (so `idf.py flash` → hard reset → port reappears with no
-> intervention), modern libvirt's udev/nodedev integration usually re-binds
-> matching devices. If you find the port still doesn't come back
-> automatically, add a host udev rule to (re)attach on the device's `add`
-> event:
->
-> ```
-> # /etc/udev/rules.d/90-espressif-c3.rules   (on the HOST)
-> ACTION=="add",    SUBSYSTEM=="usb", ATTR{idVendor}=="303a", ATTR{idProduct}=="1001", \
->   RUN+="/usr/bin/virsh attach-device <domain> /etc/libvirt/usb/espc3.xml --live"
-> ACTION=="remove", SUBSYSTEM=="usb", ATTR{idVendor}=="303a", ATTR{idProduct}=="1001", \
->   RUN+="/usr/bin/virsh detach-device <domain> /etc/libvirt/usb/espc3.xml --live"
-> ```
->
-> where `/etc/libvirt/usb/espc3.xml` is the vendor/product-only `<hostdev>`
-> fragment above. **Try the plain vendor/product hostdev first** — you may
-> well not need the udev rule at all.
+   This is manual friction, but infrequent for a dev setup, and it's the
+   reliable path.
 
-### Two boards, no collision
+> **Why not just drop the host `<address>` from `<source>` (vendor/product
+> only)?** That *is* a valid libvirt form and does help at VM-restart
+> re-resolution — but it does **not** help with in-flight re-enumeration:
+> libvirt binds to a concrete host device object at attach time and does not
+> re-resolve when that object disappears mid-session. Since virt-manager
+> rewrites the whole `<hostdev>` (and re-pins the `<address>`) whenever you
+> re-add via the GUI, keeping the `startupPolicy='optional'` + re-add-on-reset
+> workflow is simpler than chasing a vendor/product-only config the GUI keeps
+> overwriting. If you mostly edit the XML by hand, dropping the host
+> `<address>` is a reasonable refinement — see the "Tried and abandoned" note
+> on udev hotplug below for the full picture.
+
+## Tried and abandoned: udev-rule-driven hotplug
+
+To eliminate the manual re-add, we attempted a host udev rule that calls
+`virsh attach-device`/`detach-device --live` on the board's `add`/`remove`
+(and `bind`/`unbind`) events. **This did not work reliably and is not
+recommended** — recorded here so future-self doesn't burn time re-deriving it.
+
+**Failure modes observed:**
+
+- **Attach/detach feedback loop.** When libvirt attaches a USB device to the
+  guest, it *detaches it from the host driver* — which itself fires host
+  `remove`/`unbind` events. A `detach-device` rule keyed on those events then
+  yanks the device back to the host, which re-binds the host `cdc_acm`
+  driver, which fires `add`/`bind` → attach → host-unbind → detach → … The
+  device ends up in a ~0.8 s reset loop and visible on **neither** side
+  stably. Gating the detach rule on `ENV{BUSNUM}=="?*"` (present only on
+  genuine physical events) is *not* sufficient to prevent this.
+- **Collision with the persistent (boot) hostdev.** When the device is also
+  in the VM's persistent config (our case, for `startupPolicy`), the udev
+  `add`/`bind` attach fights with the boot-time attach for the same device.
+- **Modern udev actions.** Kernels since ~4.12 (2017) emit `bind`/`unbind`
+  events in addition to `add`/`remove`; a rule that only matches the latter
+  silently does nothing on a modern host. Any hand-rolled rule must handle
+  `ACTION=="add|bind"` and `ACTION=="remove|unbind"`.
+
+**If this ever needs to be made fully automatic,** the maintained-shape
+upgrade path is the [`olavmrk/usb-libvirt-hotplug`](https://github.com/olavmrk/usb-libvirt-hotplug)
+script (a udev-driven `virsh attach/detach-device` wrapper). Caveats: the
+upstream project is effectively abandoned (last push 2022, open PRs
+unmerged), and it **does not work on modern kernels as-is** — it rejects
+`bind`/`unbind` actions and exits 1. Apply PR #6 ("Tolerate new udev actions
+bind/unbind") and use a tempfile for the device XML (issue #5) instead of
+`/dev/stdin`. Even then, for a device *also* in the persistent config, the
+feedback-loop hazard above applies — that use case is genuinely finicky and
+not worth the complexity for this single-board dev setup.
+
+## Two boards, no collision
 
 When the WROOM-32 is added, its USB-UART bridge is a different vendor
 entirely (CP2102 → `10c4:ea60`, or CH340/CH341 → `1a86:7523`; confirm with
 `lsusb` on the host when you plug it in). So matching each board by
-vendor/product is unambiguous — no bus/device address needed to
+vendor/product is unambiguous — no host bus/device address needed to
 disambiguate.
