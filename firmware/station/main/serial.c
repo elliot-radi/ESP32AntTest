@@ -346,18 +346,39 @@ static void handle_line(char *line)
     cJSON_Delete(root);
 }
 
-/* Reader task: reads USB-CDC lines from stdin. ESP-IDF routes USB-CDC to
- * the VFS so stdio fgets works. 4 KB max per SERIAL_PROTOCOL.md §1. */
+/* Reader task: reads USB-CDC lines from stdin and dispatches complete lines.
+ *
+ * IMPORTANT: ESP-IDF's USB-CDC VFS does NOT line-buffer on input — fgets/fread
+ * return as soon as ANY bytes are available, not when a '\n' arrives. So a
+ * command that crosses a USB packet boundary (or arrives in two chunks) is
+ * returned as a partial line, and cJSON then sees truncated JSON. We work
+ * around this by accumulating bytes into a line buffer until we see '\n',
+ * then dispatching the complete line. (Serial input is slow; per-byte fgetc
+ * overhead is irrelevant.)
+ *
+ * Max control line length is 4 KB (SERIAL_PROTOCOL.md §1). */
+#define SERIAL_LINE_MAX 4096
+
 static void reader_task(void *arg)
 {
-    char buf[4096];
+    static char line[SERIAL_LINE_MAX];
+    int len = 0;
     while (1) {
-        if (!fgets(buf, sizeof(buf), stdin)) {
-            /* EOF / no input; back off briefly to avoid a tight loop. */
-            vTaskDelay(pdMS_TO_TICKS(50));
+        int c = fgetc(stdin);
+        if (c == EOF) {
+            /* No input available right now; back off briefly. */
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        handle_line(buf);
+        if (c == '\r') continue;   /* ignore CR; we split on \n only */
+        if (len < SERIAL_LINE_MAX - 1) {
+            line[len++] = (char)c;
+        }
+        if (c == '\n') {
+            line[len] = 0;
+            handle_line(line);
+            len = 0;
+        }
     }
 }
 

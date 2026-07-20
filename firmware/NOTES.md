@@ -99,11 +99,15 @@ Full detail + fix in the `esp-idf-build` skill.
 - **`esp_vfs_littlefs_conf_t` field is `base_path`**, not `mount_point`.
 - **`-Werror=format-truncation`** on path buffers built from `d_name` —
   size path buffers to ~300 bytes.
+- **`fgets`/`fread` on USB-CDC VFS return partial lines** (`serial.c`) —
+  ESP-IDF's USB-CDC VFS does NOT line-buffer on input; `fgets` returns as
+  soon as any bytes arrive, not when `\n` arrives, so a command crossing
+  a USB packet boundary is returned truncated and cJSON fails with
+  "malformed JSON". Fix: accumulate bytes (fgetc loop) until `\n`, then
+  dispatch the complete line. (Intermittent — fails ~20% under rapid-fire.)
 
-## Known issue (Increment 1, to fix in Increment 2)
+## Reader task
 
-The `serial_rx` reader task's `fgets(stdin)` misbehaves when the station's
-own TX output echoes on the USB-CDC stdin — a runaway re-dispatch loop
-(repeats the last command's response). All protocol handlers are correct
-when fed single commands; the input-loop plumbing is the next fix before
-the RF increment.
+The serial reader accumulates bytes until `\n` then dispatches the complete
+line — do NOT use `fgets`/`fread` directly on USB-CDC stdin, which return
+partial lines (see gotchas).
