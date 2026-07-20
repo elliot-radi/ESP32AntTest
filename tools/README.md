@@ -68,13 +68,27 @@ behavior is visible without a field test. It is a model, not a measurement.
 ## Host webserver (slice 1)
 
 ```bash
-# from repo root
+# from repo root (on the headless dev VM)
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r tools/requirements.txt
-python tools/server.py --port 8000
-# open http://127.0.0.1:8000/
-# Connect → /dev/ttyUSB0 (Station) → pick protocol → Start session
+python tools/server.py --port 8000   # binds 0.0.0.0 by default
 ```
+
+**Browser is usually on the hypervisor host, not in the VM.** The VM's
+libvirt DNS/NAT address is typically `192.168.122.x` (`hostname -I` on the
+VM). Open e.g. `http://192.168.122.80:8000/` from the host. If host↔guest
+HTTP is blocked, tunnel instead:
+
+```bash
+# on the hypervisor host
+ssh -L 8000:127.0.0.1:8000 elliot@192.168.122.80
+# then open http://127.0.0.1:8000/ on the host
+```
+
+Station USB serial stays in the VM (`/dev/ttyUSB0`); only the HTTP UI
+crosses to the host.
+
+Then: **Connect → `/dev/ttyUSB0` → pick protocol → Start session**.
 
 API sketch: `GET /api/ports`, `POST /api/connect`, `GET /api/protocols`,
 `POST /api/start_session`, `POST /api/end_session`, `GET /api/stream` (SSE),

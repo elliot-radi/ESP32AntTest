@@ -11,7 +11,12 @@ Usage (repo root):
   python -m venv .venv && . .venv/bin/activate
   pip install -r tools/requirements.txt
   python tools/server.py --port 8000
-  # open http://127.0.0.1:8000/
+  # On the machine running the browser (often the hypervisor host):
+  #   http://<vm-lan-ip>:8000/   e.g. http://192.168.122.80:8000/
+  # Default bind is 0.0.0.0 so the headless VM is reachable on the LAN
+  # NAT (libvirt default 192.168.122.0/24). Or SSH tunnel from the host:
+  #   ssh -L 8000:127.0.0.1:8000 user@192.168.122.80
+  #   open http://127.0.0.1:8000/
 """
 from __future__ import annotations
 
@@ -269,11 +274,31 @@ def index():
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     ap = argparse.ArgumentParser(description="ESP32AntTest host webserver")
-    ap.add_argument("--host", default="127.0.0.1")
+    # 0.0.0.0: reachable from the hypervisor host on the libvirt LAN when the
+    # VM is headless (binding 127.0.0.1 is only useful with an SSH -L tunnel).
+    ap.add_argument("--host", default="0.0.0.0",
+                    help="bind address (default 0.0.0.0 for headless VM → host browser)")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--reload", action="store_true")
     args = ap.parse_args()
+    import socket
     import uvicorn
+
+    if args.host in ("0.0.0.0", "::"):
+        try:
+            lan = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            lan = "<vm-ip>"
+        # Prefer non-loopback addresses seen on interfaces
+        try:
+            import subprocess
+            out = subprocess.check_output(["hostname", "-I"], text=True).split()
+            lan = next((a for a in out if not a.startswith("127.")), lan)
+        except Exception:
+            pass
+        print(f"Host UI: http://{lan}:{args.port}/  (or SSH -L {args.port}:127.0.0.1:{args.port})")
+    else:
+        print(f"Host UI: http://{args.host}:{args.port}/")
 
     uvicorn.run(
         "server:app" if args.reload else app,
