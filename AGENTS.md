@@ -191,8 +191,7 @@ battery/RTC hardware, sleep modes, multi-axis orientation, **ad-hoc Manual/Auto*
 3. **Deferred:** in-browser protocol authoring (edit `protocols/*.json` instead).
 
 Ad-hoc Manual/Auto are **out of scope** (SPEC DI-11). Time-soak = host guided
-`soak`/`free` +
-plots. Day-to-day characterization needs firmware flashed once; operate from
-host-side `tools/server.py` + Station USB (no VM required for RF runs).
+`soak`/`free` + plots. Day-to-day characterization needs firmware flashed once;
+operate from host-side `tools/server.py` + Station USB (no VM required for RF runs).
 
 Update the "Implementation status" line above and this list as work lands.
