@@ -159,10 +159,23 @@ General IDF items also live in the `esp-idf-build` skill.
 
 ### RF link (Increment 2+) / outage + guided
 
+- **Host TX power** — `start_session` `tx_sta` → Station `esp_wifi_set_max_tx_power`
+  (logged after IDF clamp, often 20→~17). `tx_mob` is commanded on every
+  `PKT_PROTOCOL` frame (`tx_power` field = Mobile dBm, **not** Station TX).
+  Mobile applies before guided/ad-hoc recording. Empty JSON still gets one
+  setup chunk so power-only sessions work. CSV `tx_mob` comes from Mobile's
+  beacon `tx_power` after apply (verify with `tx_mob=2` → rows show `2`).
 - **`source=MOB` outage rows** — Mobile sets `reserved[0] |= ANT_RSV0_MOB_OUTAGE`
-  (`protocol.h`) on buffered RSSI beacons; Station logs them as `LOG_SRC_MOB`
-  with empty `rssi_sta` (does not use the late-forward wire RSSI as `rssi_sta`).
-  Markers forward without the flag (just `PKT_MARKER` + step_id).
+  on buffered RSSI beacons when it still hears Station but Station piggyback
+  is empty/stale >~2 s; Station logs `LOG_SRC_MOB` with empty `rssi_sta`.
+  **TODO (field):** not yet seen on wire — range + `tx_mob≪tx_sta` produced
+  `link_loss`/`mob_rejoined` and STA dual-RSSI, not MOB drain. Need true
+  one-way (downlink OK, uplink/piggyback dead) or a temporary empty-piggyback
+  inject to prove the merge path.
+- **Button poll** — Mobile UI task must poll ~50 Hz continuously; sleeping a
+  full display period between short poll bursts drops short presses.
+- **Protocol re-forward** — Station re-sends `PKT_PROTOCOL` on SoftAP STA join
+  while a session is active (Mobile boot/rejoin after one-shot at start).
 - **Guided protocol** — Mobile `guide.c` parses full `steps[]` from
   `PKT_PROTOCOL` JSON. Short-press = ready (marker + live view) then next
   step; OLED shows `Step i/n` + prompt. Station stays in lockstep via live
