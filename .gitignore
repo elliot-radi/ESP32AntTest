@@ -34,3 +34,7 @@ tests/*_test
 # artifacts in repo-root logs/). Keep root logs/ and plots/ tracked — they are
 # mockup outputs that document the schema validation.
 tools/logs/*.csv
+
+# pi (coding agent) session-export artifacts — written to the project root,
+# not project content.
+pi-session-*.html
