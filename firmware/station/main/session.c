@@ -23,6 +23,7 @@ static int64_t  s_epoch_at_baseline = 0;
 /* ---- session ---- */
 static station_session_t s_session = {0};
 static station_state_t   s_state = STATION_STATE_QUICKCHECK;
+static char              s_loaded_protocol_id[48] = {0};
 
 /* Monotonic boot counter for the UNKNOWN_<n> fallback (persisted in NVS in a
  * later increment; for now a boot-static counter). */
@@ -140,8 +141,11 @@ int session_begin(ant_mode_t mode, int8_t tx_mob, int8_t tx_sta,
     s_session.tx_mob  = tx_mob;
     s_session.tx_sta  = tx_sta;
     s_session.step_id = 0;
-    if (protocol_id)
+    if (protocol_id && protocol_id[0])
         snprintf(s_session.protocol_id, sizeof(s_session.protocol_id), "%s", protocol_id);
+    else if (s_loaded_protocol_id[0])
+        snprintf(s_session.protocol_id, sizeof(s_session.protocol_id), "%s",
+                 s_loaded_protocol_id);
     s_state = STATION_STATE_SESSION;
     ESP_LOGI(TAG, "session begin: %s mode=%d tx_mob=%d tx_sta=%d proto=%s",
              s_session.session_id, mode, tx_mob, tx_sta,
@@ -161,6 +165,20 @@ int session_end(void)
 void session_set_step(uint16_t step_id)
 {
     if (s_session.active) s_session.step_id = step_id;
+}
+
+void session_set_protocol_id(const char *protocol_id)
+{
+    if (!protocol_id) {
+        s_loaded_protocol_id[0] = 0;
+        return;
+    }
+    snprintf(s_loaded_protocol_id, sizeof(s_loaded_protocol_id), "%s", protocol_id);
+}
+
+const char *session_get_protocol_id(void)
+{
+    return s_loaded_protocol_id;
 }
 
 station_state_t session_get_state(void) { return s_state; }

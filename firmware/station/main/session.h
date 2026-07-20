@@ -79,9 +79,14 @@ int session_begin(ant_mode_t mode, int8_t tx_mob, int8_t tx_sta,
  * file (logger.c owns that) — caller calls logger_close() around this. */
 int session_end(void);
 
-/* Set the active step_id (advanced by a Mobile marker in a later increment).
+/* Set the active step_id (advanced by a Mobile marker).
  * No-op if no session active. */
 void session_set_step(uint16_t step_id);
+
+/* Remember the protocol id between load_protocol and start_session.
+ * session_begin() copies this into the active session descriptor. */
+void session_set_protocol_id(const char *protocol_id);
+const char *session_get_protocol_id(void);
 
 /* ---- accessors (read-only snapshots) ---- */
 

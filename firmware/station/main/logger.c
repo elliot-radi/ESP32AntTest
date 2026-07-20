@@ -59,16 +59,23 @@ static void fmt_rssi(char *buf, int bufsz, int8_t r)
         snprintf(buf, bufsz, "%d", r);
 }
 
-/* Format one row as CSV (no trailing newline, no `>` prefix). */
+/* Format one row as CSV (no trailing newline, no `>` prefix).
+ * Empty columns use the RSSI_EMPTY sentinel (-128), not source alone:
+ *   STA rows: both directions via piggyback (rssi_mob may still be empty
+ *             if Mobile hasn’t heard us yet).
+ *   MOB rows: rssi_mob present, rssi_sta empty (uplink outage). */
 static int fmt_row(const log_row_t *row, char *out, int outsz)
 {
     char dt[24] = {0};
     session_datetime_now(dt, sizeof(dt));   /* empty if time unset — SPEC §4 */
     char rssi_mob[8], rssi_sta[8];
-    fmt_rssi(rssi_mob, sizeof(rssi_mob),
-             (row->source == LOG_SRC_STA) ? row->rssi_mob : RSSI_EMPTY);
-    fmt_rssi(rssi_sta, sizeof(rssi_sta),
-             (row->source == LOG_SRC_MOB) ? RSSI_EMPTY : row->rssi_sta);
+    int8_t rm = row->rssi_mob;
+    int8_t rs = row->rssi_sta;
+    if (row->source == LOG_SRC_MOB) {
+        rs = RSSI_EMPTY;          /* Station never decoded this uplink */
+    }
+    fmt_rssi(rssi_mob, sizeof(rssi_mob), rm);
+    fmt_rssi(rssi_sta, sizeof(rssi_sta), rs);
     return snprintf(out, outsz,
         "%s,%u,%u,%llu,%s,%s,%d,%d,%s,%s,%s,%s",
         row->session_id ? row->session_id : "",

@@ -1,0 +1,7 @@
+# Mobile sdkconfig defaults — Config A is ESP32-C3 (native USB JTAG/serial).
+# Minimal partition table: nvs + phy + factory only (no LittleFS on Mobile).
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# C3 native USB serial/JTAG console (ttyACM*).
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

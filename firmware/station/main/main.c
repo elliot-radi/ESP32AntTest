@@ -1,16 +1,14 @@
 /* ESP32AntTest — Station main.
  *
- * Increment 1: serial protocol + boot + LittleFS (no RF yet).
- *   - Real boot banner (real MAC) + $ time_prompt
- *   - LittleFS mounted
- *   - serial reader task dispatching host commands (hello/settime/
- *     load_protocol/start_session/end_session/status/list_logs/fetch_log/
- *     delete_log)
- *   - session state machine + wall-clock baseline
- * Beacon RX, RSSI logging, protocol forward to Mobile, and ESP-NOW arrive
- * with the RF increment.
+ * Increment 2: RF + beacon logging on top of Increment 1's serial/session/
+ * LittleFS surface.
+ *   - SoftAP (Mode A) + UDP beacons at ANT_BEACON_HZ
+ *   - ESP-NOW (Mode B) peer beacons
+ *   - Promiscuous per-beacon RSSI (ADR-001 addendum)
+ *   - Protocol forward to Mobile (PKT_PROTOCOL chunks)
+ *   - Serena: `>` rows from decoded Mobile beacons while session active
  *
- * See docs/SERIAL_PROTOCOL.md (contract), docs/SPEC.md §3.3/§3.6.
+ * See docs/SERIAL_PROTOCOL.md, docs/SPEC.md §3.1/§3.3/§5, ADR-004.
  */
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +22,7 @@
 #include "session.h"
 #include "logger.h"
 #include "serial.h"
+#include "rf.h"
 
 static const char *TAG = "main";
 
@@ -40,20 +39,21 @@ void app_main(void)
                        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     serial_emit_banner("Built: " __DATE__);
     serial_emit_banner("IDF: %s", esp_get_idf_version());
-    serial_emit_banner("Quick-Check beaconing not yet implemented (Increment 1)");
 
     /* ---- init subsystems ---- */
     session_init();
     logger_init();   /* LittleFS mount; non-fatal if it fails (serial-only) */
+    ant_rf_init();
+    ant_rf_start();      /* SoftAP + UDP + promiscuous + beacon task (Quick-Check) */
+
+    serial_emit_banner("Quick-Check: SoftAP up, beaconing @ %d Hz (Mode A)",
+                       ANT_BEACON_HZ);
 
     /* ---- prompt the host for wall-clock time ---- */
     serial_emit_evt("time_prompt");
 
-    ESP_LOGI(TAG, "Station up; waiting for host commands on serial");
+    ESP_LOGI(TAG, "Station up; RF Quick-Check + serial command reader");
 
     /* ---- start the serial command reader ---- */
     serial_start();
-
-    /* app_main returning is fine; the reader task keeps running. Quick-Check
-     * beaconing (when implemented) will be its own task, started here. */
 }

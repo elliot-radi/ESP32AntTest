@@ -6,7 +6,9 @@
 #include "session.h"
 #include "logger.h"
 #include "protocol.h"
+#include "rf.h"
 #include "cJSON.h"
+#include <esp_mac.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -94,9 +96,12 @@ static void cmd_hello(void)
     cJSON_AddStringToObject(j, "evt", "hello");
     cJSON_AddStringToObject(j, "board", "station");
     cJSON_AddStringToObject(j, "fw", "0.3.0");
-    /* MAC filled at app_main boot; read back from a static here would need
-     * nvs/netif — for v1 we leave it to the banner line which already prints
-     * the MAC. The host gets board+fw from here. */
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+    char macstr[13];
+    snprintf(macstr, sizeof(macstr), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    cJSON_AddStringToObject(j, "mac", macstr);
     serial_emit_evt_obj(j);
 }
 
@@ -132,11 +137,12 @@ static void cmd_load_protocol(cJSON *root)
         serial_emit_evt_obj(j);
         return;
     }
-    /* Minimal structural validation: a protocol is an array of steps under
-     * "steps", each with a "type". We accept + remember the id for logging.
-     * Full validation + Mobile forward arrives with the RF increment. */
+    /* Minimal structural validation: a protocol is an object with a "steps"
+     * array. Accept "id" or "protocol_id" as the identifier (example JSON
+     * in protocols/ uses protocol_id). */
     cJSON *steps = cJSON_GetObjectItem(p, "steps");
     cJSON *pid = cJSON_GetObjectItem(p, "id");
+    if (!pid) pid = cJSON_GetObjectItem(p, "protocol_id");
     if (!steps || !cJSON_IsArray(steps)) {
         cJSON *j = cJSON_CreateObject();
         cJSON_AddStringToObject(j, "evt", "protocol_error");
@@ -144,11 +150,19 @@ static void cmd_load_protocol(cJSON *root)
         serial_emit_evt_obj(j);
         return;
     }
-    /* Stash the protocol id in the session module (empty if absent). */
     const char *id_str = (pid && cJSON_IsString(pid)) ? pid->valuestring : "";
-    /* We can't store the full protocol JSON yet (no Mobile forward in this
-     * increment) — session_begin takes the id only. */
-    session_set_step(0);   /* will be advanced by markers later */
+    session_set_protocol_id(id_str);
+    session_set_step(0);
+
+    /* Stash the full protocol JSON for PKT_PROTOCOL forward at session start. */
+    char *raw = cJSON_PrintUnformatted(p);
+    if (raw) {
+        ant_rf_set_protocol_json(raw);
+        free(raw);
+    } else {
+        ant_rf_set_protocol_json(NULL);
+    }
+
     cJSON *j = cJSON_CreateObject();
     cJSON_AddStringToObject(j, "evt", "protocol_loaded");
     cJSON_AddStringToObject(j, "protocol_id", id_str);
@@ -176,7 +190,7 @@ static void cmd_start_session(cJSON *root)
     int8_t tx_mob = (tm && cJSON_IsNumber(tm)) ? (int8_t)tm->valuedouble : ANT_DEFAULT_TX_POWER;
     int8_t tx_sta = (ts && cJSON_IsNumber(ts)) ? (int8_t)ts->valuedouble : ANT_DEFAULT_TX_POWER;
 
-    if (session_begin(mode, tx_mob, tx_sta, "") != 0) {
+    if (session_begin(mode, tx_mob, tx_sta, session_get_protocol_id()) != 0) {
         emit_error("start_session: session_begin failed");
         return;
     }
@@ -197,8 +211,9 @@ static void cmd_start_session(cJSON *root)
     } else {
         emit_error("start_session: log_open failed (serial-only)");
     }
-    /* RF: begin beaconing in `mode`, forward protocol to Mobile (PKT_PROTOCOL).
-     * Arrives with the RF increment. */
+
+    /* RF: switch mode if needed, apply TX power, forward protocol, log beacons. */
+    ant_rf_on_session_begin();
 }
 
 static void cmd_end_session(void)
@@ -210,7 +225,8 @@ static void cmd_end_session(void)
     const station_session_t *s = session_get();
     char sid[16];
     snprintf(sid, sizeof(sid), "%s", s->session_id);
-    /* Close log first, then end session. */
+    /* Stop logging first, then close file, then end session. */
+    ant_rf_on_session_end();
     logger_close();
     cJSON *j2 = cJSON_CreateObject();
     cJSON_AddStringToObject(j2, "evt", "log_closed");
