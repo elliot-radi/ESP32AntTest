@@ -56,6 +56,10 @@ static bool       s_peer_ip_known = false;
 
 static char      *s_protocol_json = NULL;    /* heap copy; may be NULL */
 static bool       s_protocol_fwd_pending = false;
+/* Mobile TX power commanded by the host for this session (dBm). Piggybacked
+ * on PKT_PROTOCOL.tx_power so Mobile can call esp_wifi_set_max_tx_power.
+ * (Station's own TX is s_tx_dbm / session tx_sta — never put on PROTOCOL.) */
+static int8_t     s_session_tx_mob = ANT_DEFAULT_TX_POWER;
 
 /* UDP socket for Mode A beacons (bound to ANT_UDP_PORT). */
 static int        s_udp_sock      = -1;
@@ -355,16 +359,24 @@ static void send_beacon(void)
 
 static void send_protocol_chunks(void)
 {
-    if (!s_protocol_json || !s_protocol_json[0]) return;
-
-    const char *json = s_protocol_json;
+    /* Always emit at least one PKT_PROTOCOL frame so Mobile can apply the
+     * session's tx_mob even when no guided JSON was loaded (ad-hoc host
+     * session, power-only setup). Empty payload = total_len 0. */
+    const char *json = (s_protocol_json && s_protocol_json[0]) ? s_protocol_json : "";
     uint16_t total = (uint16_t)strlen(json);
     uint16_t offset = 0;
-    uint8_t n_chunks = (uint8_t)((total + PROTO_CHUNK_DATA - 1) / PROTO_CHUNK_DATA);
+    uint8_t n_chunks = (total == 0)
+        ? 1
+        : (uint8_t)((total + PROTO_CHUNK_DATA - 1) / PROTO_CHUNK_DATA);
     if (n_chunks == 0) n_chunks = 1;
 
+    /* Host-commanded Mobile TX for this session — NOT Station's own TX. */
+    int8_t tx_mob_cmd = s_session_tx_mob;
+    const station_session_t *sess = session_get();
+    if (sess) tx_mob_cmd = sess->tx_mob;
+
     for (uint8_t idx = 0; idx < n_chunks; idx++) {
-        uint16_t take = total - offset;
+        uint16_t take = (total > offset) ? (uint16_t)(total - offset) : 0;
         if (take > PROTO_CHUNK_DATA) take = PROTO_CHUNK_DATA;
 
         ant_packet_t pkt = {0};
@@ -376,7 +388,7 @@ static void send_protocol_chunks(void)
         pkt.session_id = session_id_wire();
         pkt.step_id  = 0;
         pkt.rssi_local = s_rssi_local;
-        pkt.tx_power = s_tx_dbm;
+        pkt.tx_power = tx_mob_cmd;   /* commanded Mobile TX (dBm) */
         pkt.reserved[0] = idx;
         pkt.reserved[1] = n_chunks;
         pkt.reserved[2] = (uint8_t)(total & 0xFF);
@@ -424,12 +436,8 @@ static void send_protocol_chunks(void)
 
 void ant_rf_forward_protocol(void)
 {
-    if (!s_protocol_json || !s_protocol_json[0]) {
-        s_protocol_fwd_pending = false;
-        return;
-    }
-    /* Try even without a known peer (broadcast); mark pending so a later
-     * join retries unicast. */
+    /* Always forward session setup (tx_mob + optional JSON). Mark pending
+     * when no STA peer yet so the SoftAP join path retries. */
     s_protocol_fwd_pending = !s_peer_known;
     send_protocol_chunks();
     if (s_peer_known) s_protocol_fwd_pending = false;
@@ -747,8 +755,11 @@ void ant_rf_on_session_begin(void)
 
     const station_session_t *s = session_get();
     if (s) {
+        s_session_tx_mob = s->tx_mob;
         ant_rf_set_mode(s->mode);
         ant_rf_set_tx_power(s->tx_sta);
+        ESP_LOGI(TAG, "session RF: tx_sta_cmd=%d tx_mob_cmd=%d dBm",
+                 (int)s->tx_sta, (int)s->tx_mob);
     }
     ant_rf_forward_protocol();
     ESP_LOGI(TAG, "session logging ON");

@@ -148,17 +148,66 @@ static void apply_guide_step_ui(const guide_step_t *g)
              (unsigned)g->step_id, guide_step_count(), g->prompt);
 }
 
+static void apply_session_setup_from_protocol(const ant_packet_t *hdr,
+                                              const char *json, uint16_t jlen)
+{
+    /* PKT_PROTOCOL.tx_power carries the host-commanded Mobile TX (dBm),
+     * not Station's TX. Apply before we start recording beacons so the
+     * first logged rows already show the intended power. */
+    if (hdr) {
+        int8_t cmd = hdr->tx_power;
+        if (cmd >= ANT_TX_POWER_LOW && cmd <= ANT_TX_POWER_MAX) {
+            ESP_LOGI(TAG, "session TX commanded %d dBm (via PKT_PROTOCOL)", (int)cmd);
+            ant_mrf_set_tx_power(cmd);
+        } else if (cmd != 0) {
+            ESP_LOGW(TAG, "session TX %d dBm out of range, ignoring",
+                     (int)cmd);
+        }
+    }
+
+    if (json && jlen > 0 &&
+        guide_load_json(json) == 0 && guide_begin() == 0) {
+        s_recording = true;
+        s_guided = true;
+        s_step_active = false;
+        ui_set_recording(true);
+        apply_guide_step_ui(guide_current());
+    } else {
+        if (json && jlen > 0)
+            ESP_LOGW(TAG, "protocol JSON present but no steps — ad-hoc");
+        else
+            ESP_LOGI(TAG, "session setup without guided steps — recording on");
+        s_recording = true;
+        s_guided = false;
+        s_step_id = 1;
+        s_step_active = true;
+        ui_set_recording(true);
+        ui_set_step(s_step_id);
+        ui_show(UI_SCREEN_SESSION);
+    }
+}
+
 static void handle_protocol_chunk(const ant_packet_t *hdr,
                                   const uint8_t *ext, int ext_len)
 {
-    /* Extended: [20 B pkt][u16 total][u16 offset][data...] OR data after hdr
-     * only when ext points at +0 relative to full frame past ant_packet. */
+    /* Extended: [20 B pkt][u16 total][u16 offset][data...].
+     * total==0 is a power/session-only setup frame (no guided JSON). */
     if (ext_len < 4) return;
     uint16_t total  = (uint16_t)(ext[0] | (ext[1] << 8));
     uint16_t offset = (uint16_t)(ext[2] | (ext[3] << 8));
     const uint8_t *data = ext + 4;
     int dlen = ext_len - 4;
-    if (total == 0 || total > PROTO_JSON_MAX) return;
+
+    if (total > PROTO_JSON_MAX) return;
+
+    if (total == 0) {
+        apply_session_setup_from_protocol(hdr, NULL, 0);
+        free(s_proto_buf);
+        s_proto_buf = NULL;
+        s_proto_total = s_proto_got = 0;
+        return;
+    }
+
     if (offset + dlen > total) dlen = total - offset;
 
     if (!s_proto_buf || s_proto_total != total) {
@@ -168,31 +217,14 @@ static void handle_protocol_chunk(const ant_packet_t *hdr,
         s_proto_got = 0;
     }
     if (!s_proto_buf) return;
-    memcpy(s_proto_buf + offset, data, dlen);
-    /* Recount approx filled — simple: track high-water. */
+    if (dlen > 0) memcpy(s_proto_buf + offset, data, dlen);
+    /* Track high-water of received payload. */
     if (offset + dlen > s_proto_got) s_proto_got = offset + dlen;
 
     if (s_proto_got >= total) {
         s_proto_buf[total] = 0;
         ESP_LOGI(TAG, "protocol received (%u bytes)", total);
-
-        if (guide_load_json(s_proto_buf) == 0 && guide_begin() == 0) {
-            s_recording = true;
-            s_guided = true;
-            s_step_active = false;
-            ui_set_recording(true);
-            apply_guide_step_ui(guide_current());
-        } else {
-            ESP_LOGW(TAG, "protocol loaded but no steps — ad-hoc fallback");
-            s_recording = true;
-            s_guided = false;
-            s_step_id = 1;
-            s_step_active = true;
-            ui_set_recording(true);
-            ui_set_step(s_step_id);
-            ui_show(UI_SCREEN_SESSION);
-        }
-
+        apply_session_setup_from_protocol(hdr, s_proto_buf, total);
         free(s_proto_buf);
         s_proto_buf = NULL;
         s_proto_total = s_proto_got = 0;
@@ -668,12 +700,19 @@ int ant_mrf_set_tx_power(int8_t dbm)
     s_tx_dbm = dbm;
     esp_err_t err = esp_wifi_set_max_tx_power(ANT_DBM_TO_IDF(dbm));
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "tx power: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "set_max_tx_power(%d dBm): %s", (int)dbm, esp_err_to_name(err));
+        /* Keep commanded value for the wire even if IDF rejects (rare); UI
+         * still reflects what we intend until a successful read-back. */
+        ui_set_tx(s_tx_dbm);
         return -1;
     }
     int8_t q = 0;
-    if (esp_wifi_get_max_tx_power(&q) == ESP_OK)
-        s_tx_dbm = (int8_t)((q + 2) / 4);
+    if (esp_wifi_get_max_tx_power(&q) == ESP_OK) {
+        int8_t actual = (int8_t)((q + 2) / 4);
+        ESP_LOGI(TAG, "TX power requested %d dBm, actual ~%d dBm",
+                 (int)dbm, (int)actual);
+        s_tx_dbm = actual;
+    }
     ui_set_tx(s_tx_dbm);
     return 0;
 }
