@@ -476,14 +476,23 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         lock();
         memcpy(s_peer_mac, e->mac, 6);
         s_peer_known = true;
+        /* Fresh association — forget prior STA IP so we broadcast until we
+         * learn the new lease (handles SoftAP DHCP re-issue on rejoin). */
+        s_peer_ip_known = false;
         unlock();
         ESP_LOGI(TAG, "STA joined: %02X:%02X:%02X:%02X:%02X:%02X",
                  e->mac[0], e->mac[1], e->mac[2],
                  e->mac[3], e->mac[4], e->mac[5]);
-        if (s_protocol_fwd_pending) ant_rf_forward_protocol();
+        /* Re-forward whenever a session is active (or still pending from
+         * start_session before first join). Fixes Mobile boot/rejoin after
+         * the one-shot forward at session start. */
+        if (s_logging || s_protocol_fwd_pending) {
+            ESP_LOGI(TAG, "re-forward protocol on STA join (logging=%d pending=%d)",
+                     (int)s_logging, (int)s_protocol_fwd_pending);
+            ant_rf_forward_protocol();
+        }
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STADISCONNECTED) {
         ESP_LOGI(TAG, "STA left");
-        /* Keep last-known MAC — helpful if they crucially rejoin. */
         s_peer_ip_known = false;
     }
 }

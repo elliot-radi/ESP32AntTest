@@ -575,21 +575,26 @@ static void beacon_task(void *arg)
 
 static void ui_task(void *arg)
 {
-    const TickType_t period = pdMS_TO_TICKS(1000 / ANT_DISPLAY_HZ);
+    /* Poll the button continuously at ~50 Hz so short/double/long gestures
+     * are not missed. Earlier code only polled for ~100 ms then slept a full
+     * display period (500 ms at ANT_DISPLAY_HZ=2) — short presses falling in
+     * the sleep window were dropped, which is why desk short-presses often
+     * produced no PKT_MARKER. Render is rate-limited separately. */
+    const TickType_t poll = pdMS_TO_TICKS(20);
+    const int64_t render_period_us = 1000000LL / ANT_DISPLAY_HZ;
+    int64_t last_render_us = 0;
     while (1) {
-        /* button poll ~ every display tick (50ms-ish extra inside) */
-        for (int i = 0; i < 5; i++) {
-            btn_evt_t ev = button_poll();
-            if (ev != BTN_EVT_NONE) {
-                if (!ui_handle_button(ev)) {
-                    /* unhandled */
-                }
-            }
-            vTaskDelay(pdMS_TO_TICKS(20));
+        btn_evt_t ev = button_poll();
+        if (ev != BTN_EVT_NONE) {
+            ESP_LOGI(TAG, "btn evt=%d", (int)ev);
+            (void)ui_handle_button(ev);
         }
-        /* Outage sampling is driven from on_peer_packet (asymmetric uplink). */
-        ui_render();
-        vTaskDelay(period);
+        int64_t now = esp_timer_get_time();
+        if (now - last_render_us >= render_period_us) {
+            last_render_us = now;
+            ui_render();
+        }
+        vTaskDelay(poll);
     }
 }
 
