@@ -67,16 +67,16 @@ refs/                      # datasheets + pinout images (read-only reference)
 ```
 
 **Implementation status (2026-07-20):** Shared packet encode/decode + host-C
-tests done. Station: serial protocol (`#`/`$`/`>`), session + wall-clock,
-LittleFS, SoftAP + UDP beacons @ 5 Hz, promiscuous RSSI, session `>` logging,
-`PKT_PROTOCOL` forward, **`source=MOB` outage-row merge** via
-`ANT_RSV0_MOB_OUTAGE` — verified on WROOM HW. Mobile: STA join
-`AntTest-*`, beacons, OLED Quick-Check/menu, button gestures, RAM outage
-buffer + forward, **guided multi-step protocol** (`guide.c` parses full
-`steps[]`, short-press ready/advance) — board-to-board dual-RSSI verified;
-guided path built, HW re-flash of Mobile pending when C3 reappears.
-`hwtest/` still valid as a minimal OLED/button sketch. Remaining: ESP-NOW
-path HW check, ad-hoc Auto, then `tools/server.py`.
+tests done. Station: serial + session + LittleFS, SoftAP/UDP beacons @ 5 Hz,
+promiscuous RSSI, session `>` logging, `PKT_PROTOCOL` forward (re-sends on
+STA join during session), **`source=MOB` merge** (`ANT_RSV0_MOB_OUTAGE`).
+Mobile: STA join, beacons, OLED/button, outage RAM buffer, **guided multi-step**
+(short-press ready/advance — desk HW OK after continuous button poll fix).
+**Host `tx_mob`/`tx_sta`:** `start_session` applies `tx_sta` on Station and
+commands Mobile TX via `PKT_PROTOCOL.tx_power` (desk: `tx_mob=2` → CSV `2`).
+**Open HW:** true *asymmetric* sidelink outage → `source=MOB` rows (TX skew +
+range produced link_loss/rejoin and dual STA rows, not MOB drain). Remaining:
+that outage field test (or inject), ESP-NOW HW, ad-hoc Auto, `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -181,8 +181,10 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
 
 ## Current next step
 
-1. Re-flash Mobile when `/dev/ttyACM*` is back; HW-verify guided step walk +
-   MOB outage rows (`source=MOB` in `>` stream after a deliberate range gap).
+1. **TODO (field):** Prove asymmetric outage path → `source=MOB` rows.
+   Needs downlink OK + empty/stale Station piggyback >~2 s on Mobile, then
+   drain (TX skew `tx_mob`≪`tx_sta` + geometry helps; full SoftAP drop alone
+   is not enough). Optional: Station empty-piggyback inject for path checkout.
 2. ESP-NOW mode path — code present on both sides; HW verify.
 3. Ad-hoc Auto (time-soak) on Mobile.
 4. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
