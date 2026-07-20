@@ -6,7 +6,7 @@
 
 A condensed orientation for AI agents (and humans) joining the project.
 Designed to get a fresh context to "ready to work" without re-reading every
-doc. Last updated: 2026-07-19.
+doc. Last updated: 2026-07-20.
 
 ---
 
@@ -42,11 +42,12 @@ profiles/
   good_antenna.json        # synthetic antenna profile (FPC, good)
   bad_antenna.json        # synthetic antenna profile (ceramic, deep null)
 firmware/
-  mobile/                  # PLANNED — empty (no CMakeLists, no main/, no board_config.h)
-  station/                 # INCREMENT 1 — serial protocol + session + LittleFS (no RF yet)
+  mobile/                  # IMPLEMENTED — C3 Mobile: Quick-Check STA, beacons, OLED UI, button,
+                           #   RAM outage buffer; RF link verified on HW with Station
+  station/                 # IMPLEMENTED — serial + session + LittleFS + SoftAP/UDP beacons +
+                           #   promiscuous RSSI + session logging; verified on HW
                            #   see firmware/NOTES.md for build workflow + gotchas hit
   hwtest/                  # IMPLEMENTED — C3 board bring-up (I2C scan + OLED + button), verified on HW
-                           #   components/oled_text vendored in-repo (SSD1306 text wrapper over esp_lcd)
   shared/
     CMakeLists.txt         # local component
     include/
@@ -65,13 +66,15 @@ logs/, plots/              # generated synthetic data + plots (design-process ar
 refs/                      # datasheets + pinout images (read-only reference)
 ```
 
-**Implementation status:** `protocol.c` + host-C unit tests done; Station
-skeleton (banner + self-test) builds for `esp32c3`; `firmware/hwtest/` C3
-board bring-up (I2C scan + OLED + button) **verified on hardware**. **Log
-schema and analysis validated** via the `tools/` synthetic-data mockup (see
-ADR-004). Remaining firmware: Station behaviour (beacon RX, logging, serial
-protocol, LittleFS, protocol forward) and the Mobile firmware (OLED UI,
-button gestures, beacon TX/RX, RAM outage buffer); then `tools/server.py`.
+**Implementation status (2026-07-20):** Shared packet encode/decode + host-C
+tests done. Station: serial protocol (`#`/`$`/`>`), session + wall-clock,
+LittleFS, SoftAP + UDP beacons @ 5 Hz, promiscuous RSSI, session `>` logging,
+`PKT_PROTOCOL` forward — **verified on WROOM HW**. Mobile: STA join
+`AntTest-*`, beacons, OLED Quick-Check/menu, button gestures, RAM outage
+buffer — **board-to-board dual-RSSI rows verified** (Config A: C3 Mobile +
+WROOM Station). `hwtest/` still valid as a minimal OLED/button sketch.
+Remaining: guided multi-step protocol UI polish, Station `source=MOB` outage
+row merge, ESP-NOW path HW check, then `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -88,15 +91,18 @@ button gestures, beacon TX/RX, RAM outage buffer); then `tools/server.py`.
   piggybacked. See [ADR-001](docs/ADR-001-rssi-method.md).
 - **Transport** — UDP over SoftAP/STA (Mode A), native ESP-NOW (Mode B).
   See [ADR-002](docs/ADR-002-protocol-stack.md).
+- **SoftAP addressing** — Station SoftAP SSID `AntTest-<MAC4>`, static IP
+  `ANT_STATION_IP` (`192.168.26.1`), UDP `ANT_UDP_PORT` (5432). SoftAP IP
+  must be applied **before** `esp_wifi_start()` or DHCPS keeps the IDF
+  default `192.168.4.1`.
 - **Toolchain** — ESP-IDF v5.2+, plain C, `idf.py` CLI. See [ADR-003](docs/ADR-003-toolchain.md).
-- **Roles/boards** — `ROLE_MOBILE`/`ROLE_STATION` flags; Config A (default):
-  Mobile=C3, Station=WROOM-32. Pin maps board-keyed in `board_config.h`.
-  See [SPEC §2.1](docs/SPEC.md).
+- **Roles/boards** — Config A (default): Mobile=C3, Station=WROOM-32. Pin
+  maps board-keyed in `board_config.h`. See [SPEC §2.1](docs/SPEC.md).
 - **TX power units** — dBm everywhere; convert to 0.25 dBm only at the
   `esp_wifi_set_max_tx_power()` call via `ANT_DBM_TO_IDF()`. C3 clamps 2→~3.
   See [SPEC §6](docs/SPEC.md) + [config.h](firmware/shared/include/config.h).
 - **Time source** — `timestamp_ms` boot-relative; wall-clock `datetime` via
-  serial `SETTIME` injection (no RTC/SNTP). See [SPEC Time Source](docs/SPEC.md).
+  serial `settime` injection (no RTC/SNTP). See [SPEC Time Source](docs/SPEC.md).
 - **LittleFS** — Station durable fallback only (streams over serial *and*
   mirrors to flash); Mobile has none. See [SPEC §2.3](docs/SPEC.md).
 - **Noise floor / retries** — both out of scope; loss inferred from count.
@@ -108,18 +114,24 @@ button gestures, beacon TX/RX, RAM outage buffer); then `tools/server.py`.
 - **Language:** C (not C++). ESP-IDF native APIs only.
 - **Shared code** in `firmware/shared/`, referenced as a local component
   via a per-project `components/ant_shared -> ../../shared` symlink (per
-  ADR-003). Each firmware dir (`station/`, `hwtest/`, …) has its own
-  `components/` with the symlinks it needs.
+  ADR-003). Each firmware dir (`station/`, `mobile/`, `hwtest/`, …) has its
+  own `components/` with the symlinks it needs.
+- **RF API prefixes** — never name a public symbol `rf_init` (clashes with
+  ESP-PHY). Station uses `ant_rf_*` (`rf.c`); Mobile uses `ant_mrf_*`
+  (`mrf.c`). See [firmware/NOTES.md](firmware/NOTES.md).
 - **oled_text** (SSD1306 text wrapper over the official `esp_lcd` driver,
-  + a public-domain 5×7 font) is **vendored in-repo** under
-  `firmware/hwtest/components/oled_text/` (real files, not a symlink) so the
-  project is self-contained. Not an Arduino/Adafruit lib — chosen to stay
-  within ADR-003 (plain C, native IDF, no Arduino runtime). If a later
-  firmware (Mobile) also needs it, promote to a shared in-repo copy then.
+  + a public-domain 5×7 font) is **vendored in-repo** under both
+  `firmware/hwtest/components/oled_text/` and
+  `firmware/mobile/components/oled_text/` (real files, not symlinks) so each
+  project stays self-contained. Not an Arduino/Adafruit lib — ADR-003
+  (plain C, native IDF). Future cleanup: one shared in-repo copy if drift
+  becomes painful.
 - **Packet** — `ant_packet_t`, 20 bytes, `__attribute__((packed))`. Magic
   `0xAE 0x32`, version `0x01`. Types (v0.3): `PKT_BEACON`, `PKT_MARKER`,
   `PKT_PROTOCOL`, `PKT_MODE_ACK` (PING/PONG dropped). See
   [protocol.h](firmware/shared/include/protocol.h) + [SPEC §5](docs/SPEC.md).
+  `PKT_PROTOCOL` on the wire is extended: 20-byte header + `u16 total` +
+  `u16 offset` + chunk bytes (Station↔Mobile only).
 - **Log schema** — [SPEC §3.6 / §4](docs/SPEC.md). Columns:
   `session_id,step_id,seq,timestamp_ms,datetime,mode,tx_mob,tx_sta,rssi_mob,rssi_sta,source,status`.
   `source` = STA (complete row) or MOB (Mobile-buffered during uplink outage).
@@ -159,12 +171,11 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
 
 ## Current next step
 
-1. `firmware/station/` — flesh out the skeleton: beacon RX (promiscuous
-   callback), logging to serial + LittleFS, host serial protocol
-   (SERIAL_PROTOCOL.md), protocol forward to Mobile.
-2. `firmware/mobile/` — OLED UI + button gestures (build on the `hwtest/`
-   wiring), beacon TX/RX, RAM outage buffer + forward-on-reconnect.
-3. `tools/server.py` — FastAPI webserver wrapping `analyze.py` + serial
-   bridge to Station.
+1. Guided multi-step protocol on Mobile (full step list / prompts from
+   `PKT_PROTOCOL` JSON; markers advance `step_id` end-to-end).
+2. Station: log `source=MOB` rows from Mobile outage forward; polish edge
+   cases (link_loss, session end while out of range).
+3. ESP-NOW mode path — code present on both sides; HW verify.
+4. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
 
 Update the "Implementation status" line above and this list as work lands.
