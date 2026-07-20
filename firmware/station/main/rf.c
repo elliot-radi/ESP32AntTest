@@ -56,10 +56,11 @@ static bool       s_peer_ip_known = false;
 
 static char      *s_protocol_json = NULL;    /* heap copy; may be NULL */
 static bool       s_protocol_fwd_pending = false;
-/* Mobile TX power commanded by the host for this session (dBm). Piggybacked
- * on PKT_PROTOCOL.tx_power so Mobile can call esp_wifi_set_max_tx_power.
- * (Station's own TX is s_tx_dbm / session tx_sta — never put on PROTOCOL.) */
+/* Session RF commanded by host and carried on PKT_PROTOCOL so Mobile can
+ * apply the same setup before (mode switch) / without relying on SoftAP.
+ * Station's own TX is s_tx_dbm; mode on PROTOCOL is for Mobile. */
 static int8_t     s_session_tx_mob = ANT_DEFAULT_TX_POWER;
+static ant_mode_t s_session_mode   = ANT_MODE_WIFI;
 
 /* UDP socket for Mode A beacons (bound to ANT_UDP_PORT). */
 static int        s_udp_sock      = -1;
@@ -370,10 +371,14 @@ static void send_protocol_chunks(void)
         : (uint8_t)((total + PROTO_CHUNK_DATA - 1) / PROTO_CHUNK_DATA);
     if (n_chunks == 0) n_chunks = 1;
 
-    /* Host-commanded Mobile TX for this session — NOT Station's own TX. */
+    /* Host-commanded Mobile TX + mode for this session — NOT Station's own. */
     int8_t tx_mob_cmd = s_session_tx_mob;
+    ant_mode_t mode_cmd = s_session_mode;
     const station_session_t *sess = session_get();
-    if (sess) tx_mob_cmd = sess->tx_mob;
+    if (sess) {
+        tx_mob_cmd = sess->tx_mob;
+        mode_cmd   = sess->mode;
+    }
 
     for (uint8_t idx = 0; idx < n_chunks; idx++) {
         uint16_t take = (total > offset) ? (uint16_t)(total - offset) : 0;
@@ -386,7 +391,7 @@ static void send_protocol_chunks(void)
         pkt.type     = PKT_PROTOCOL;
         pkt.seq      = offset;
         pkt.session_id = session_id_wire();
-        pkt.step_id  = 0;
+        pkt.step_id  = (uint16_t)mode_cmd; /* commanded Mobile mode */
         pkt.rssi_local = s_rssi_local;
         pkt.tx_power = tx_mob_cmd;   /* commanded Mobile TX (dBm) */
         pkt.reserved[0] = idx;
@@ -754,14 +759,33 @@ void ant_rf_on_session_begin(void)
     s_last_rx_s = esp_timer_get_time() / 1000000;
 
     const station_session_t *s = session_get();
+    ant_mode_t want = ANT_MODE_WIFI;
     if (s) {
         s_session_tx_mob = s->tx_mob;
-        ant_rf_set_mode(s->mode);
+        s_session_mode   = s->mode;
+        want = s->mode;
+        /* Apply Station TX immediately. Mode switch is deferred until AFTER
+         * PKT_PROTOCOL forward so Mobile (still on SoftAP/UDP) receives
+         * tx_mob + commanded mode before both sides leave Mode A. */
         ant_rf_set_tx_power(s->tx_sta);
-        ESP_LOGI(TAG, "session RF: tx_sta_cmd=%d tx_mob_cmd=%d dBm",
+        ESP_LOGI(TAG, "session RF: mode=%s tx_sta_cmd=%d tx_mob_cmd=%d dBm",
+                 want == ANT_MODE_WIFI ? "WIFI" : "ESPNOW",
                  (int)s->tx_sta, (int)s->tx_mob);
     }
+
+    /* Prefer current transport (Quick-Check = WIFI) for the setup frame. */
     ant_rf_forward_protocol();
+    /* Give Mobile a beat to reassemble + common mode switch. */
+    vTaskDelay(pdMS_TO_TICKS(250));
+
+    if (want != s_mode) {
+        ESP_LOGI(TAG, "session: switching Station transport -> %s",
+                 want == ANT_MODE_WIFI ? "WIFI" : "ESPNOW");
+        ant_rf_set_mode(want);
+        /* Re-announce setup on the new transport (best-effort; Mobile may
+         * already have switched from the WIFI copy). */
+        ant_rf_forward_protocol();
+    }
     ESP_LOGI(TAG, "session logging ON");
 }
 
@@ -769,8 +793,15 @@ void ant_rf_on_session_end(void)
 {
     s_logging = false;
     s_link_lost = false;
-    /* Stay in current RF mode, keep beaconing (Quick-Check). */
-    ESP_LOGI(TAG, "session logging OFF; back to Quick-Check");
+    /* Tell Mobile to return to WiFi SoftAP before we leave ESP-NOW so it can
+     * rejoin Quick-Check without a menu toggle. */
+    s_session_mode = ANT_MODE_WIFI;
+    if (s_mode != ANT_MODE_WIFI) {
+        ant_rf_forward_protocol();   /* mode=WIFI, no/keeping JSON */
+        vTaskDelay(pdMS_TO_TICKS(200));
+        ant_rf_set_mode(ANT_MODE_WIFI);
+    }
+    ESP_LOGI(TAG, "session logging OFF; back to Quick-Check (Mode A WiFi)");
 }
 
 void ant_rf_set_protocol_json(const char *json)

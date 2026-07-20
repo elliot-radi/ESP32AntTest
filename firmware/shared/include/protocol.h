@@ -34,7 +34,8 @@ typedef struct __attribute__((packed)) {
     uint8_t  type;          // ant_pkt_type_t
     uint32_t seq;
     uint32_t session_id;
-    uint16_t step_id;      // active protocol step (run); ad-hoc: incrementing run counter
+    uint16_t step_id;      // BEACON/MARKER: active protocol step (run);
+                           // PKT_PROTOCOL: commanded ant_mode_t (WIFI=1, ESPNOW=2)
     int8_t   rssi_local;    // RSSI measured locally by sender (of peer's last beacon) — piggyback
     int8_t   tx_power;      // BEACON/MARKER: sender's actual TX dBm;
                             // PKT_PROTOCOL: commanded Mobile TX dBm for the session

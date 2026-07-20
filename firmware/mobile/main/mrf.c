@@ -45,6 +45,8 @@ static EventGroupHandle_t s_wifi_eg;
 static SemaphoreHandle_t  s_mu;
 
 static ant_mode_t s_mode = ANT_MODE_WIFI;
+/* Deferred mode from PKT_PROTOCOL (applied outside RF lock / recv cb). */
+static volatile ant_mode_t s_pending_mode = 0; /* 0 = none */
 static bool       s_running = false;
 static bool       s_recording = false;   /* ad-hoc or guided session */
 static bool       s_guided    = false;   /* true if host protocol loaded */
@@ -151,9 +153,11 @@ static void apply_guide_step_ui(const guide_step_t *g)
 static void apply_session_setup_from_protocol(const ant_packet_t *hdr,
                                               const char *json, uint16_t jlen)
 {
-    /* PKT_PROTOCOL.tx_power carries the host-commanded Mobile TX (dBm),
-     * not Station's TX. Apply before we start recording beacons so the
-     * first logged rows already show the intended power. */
+    /* PKT_PROTOCOL carries host session setup:
+     *   tx_power = commanded Mobile TX (dBm)
+     *   step_id  = commanded ant_mode_t (WIFI / ESPNOW)
+     * Apply TX now; queue mode switch for beacon/ui task (recv path holds
+     * the RF lock and must not tear down WiFi / ESP-NOW in-place). */
     if (hdr) {
         int8_t cmd = hdr->tx_power;
         if (cmd >= ANT_TX_POWER_LOW && cmd <= ANT_TX_POWER_MAX) {
@@ -163,27 +167,58 @@ static void apply_session_setup_from_protocol(const ant_packet_t *hdr,
             ESP_LOGW(TAG, "session TX %d dBm out of range, ignoring",
                      (int)cmd);
         }
+
+        uint16_t m = hdr->step_id;
+        if (m == (uint16_t)ANT_MODE_WIFI || m == (uint16_t)ANT_MODE_ESPNOW) {
+            if ((ant_mode_t)m != s_mode) {
+                ESP_LOGI(TAG, "session mode commanded %s (deferred)",
+                         m == ANT_MODE_WIFI ? "WIFI" : "ESPNOW");
+                s_pending_mode = (ant_mode_t)m;
+            }
+        }
     }
 
-    if (json && jlen > 0 &&
-        guide_load_json(json) == 0 && guide_begin() == 0) {
-        s_recording = true;
-        s_guided = true;
-        s_step_active = false;
-        ui_set_recording(true);
-        apply_guide_step_ui(guide_current());
-    } else {
-        if (json && jlen > 0)
+    /* Guided JSON reloads the walk. Empty body is transport/TX setup only:
+     * used at session end (mode back to WIFI) and power-only start_session.
+     * Do not restart a guided run when Station re-forwards the same JSON on
+     * mode switch, and do not leave recording stuck on after a teardown. */
+    if (json && jlen > 0) {
+        if (s_recording && s_guided) {
+            ESP_LOGI(TAG, "protocol JSON ignored (already guided recording)");
+        } else if (guide_load_json(json) == 0 && guide_begin() == 0) {
+            s_recording = true;
+            s_guided = true;
+            s_step_active = false;
+            ui_set_recording(true);
+            apply_guide_step_ui(guide_current());
+        } else {
             ESP_LOGW(TAG, "protocol JSON present but no steps — ad-hoc");
-        else
+            s_recording = true;
+            s_guided = false;
+            if (s_step_id == 0) s_step_id = 1;
+            s_step_active = true;
+            ui_set_recording(true);
+            ui_set_step(s_step_id);
+            ui_show(UI_SCREEN_SESSION);
+        }
+    } else {
+        /* Empty payload: if host is parking us back on WIFI (session end),
+         * stop recording. If commanding ESPNOW or already WIFI with no
+         * protocol, treat as ad-hoc record only when not yet recording. */
+        bool to_wifi = hdr && hdr->step_id == (uint16_t)ANT_MODE_WIFI;
+        if (to_wifi && s_recording) {
+            ESP_LOGI(TAG, "session teardown setup (WIFI, no JSON) — stop record");
+            ant_mrf_end_session();
+        } else if (!s_recording) {
             ESP_LOGI(TAG, "session setup without guided steps — recording on");
-        s_recording = true;
-        s_guided = false;
-        s_step_id = 1;
-        s_step_active = true;
-        ui_set_recording(true);
-        ui_set_step(s_step_id);
-        ui_show(UI_SCREEN_SESSION);
+            s_recording = true;
+            s_guided = false;
+            if (s_step_id == 0) s_step_id = 1;
+            s_step_active = true;
+            ui_set_recording(true);
+            ui_set_step(s_step_id);
+            ui_show(UI_SCREEN_SESSION);
+        }
     }
 }
 
@@ -599,6 +634,16 @@ static void beacon_task(void *arg)
 {
     const TickType_t period = pdMS_TO_TICKS(1000 / ANT_BEACON_HZ);
     while (1) {
+        /* Apply deferred mode from host PKT_PROTOCOL outside recv path. */
+        ant_mode_t pend = s_pending_mode;
+        if (pend == ANT_MODE_WIFI || pend == ANT_MODE_ESPNOW) {
+            s_pending_mode = 0;
+            if (pend != s_mode) {
+                ESP_LOGI(TAG, "applying deferred mode -> %s",
+                         pend == ANT_MODE_WIFI ? "WIFI" : "ESPNOW");
+                ant_mrf_set_mode(pend);
+            }
+        }
         if (s_running) send_beacon();
         update_link_flag();
         vTaskDelay(period);
