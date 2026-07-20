@@ -29,27 +29,52 @@ async function api(path, opts = {}) {
   return body;
 }
 
+function defaultStationPort(ports) {
+  /* Config A Station = CP210x /dev/ttyUSB*. Prefer that over ttyACM (Mobile). */
+  const usb = ports.find((p) => (p.device || "").startsWith("/dev/ttyUSB"));
+  if (usb) return usb.device;
+  const cp = ports.find((p) => p.vid === 0x10c4 || p.vid === 4292);
+  if (cp) return cp.device;
+  return ports[0] && ports[0].device;
+}
+
 async function refreshPorts() {
-  const data = await api("/api/ports");
+  const showAll = $("showAllPorts") && $("showAllPorts").checked;
+  const data = await api("/api/ports" + (showAll ? "?all=1" : ""));
   const sel = $("portSelect");
+  const prev = sel.value;
   sel.innerHTML = "";
   const ports = data.ports || [];
   if (!ports.length) {
     const o = document.createElement("option");
     o.value = "";
-    o.textContent = "(none found)";
+    o.textContent = "(none found — plug Station USB / passthrough?)";
     sel.appendChild(o);
   } else {
     for (const p of ports) {
       const o = document.createElement("option");
       o.value = p.device;
-      o.textContent = `${p.device} — ${p.description || ""}`;
+      const desc = p.description || p.manufacturer || "";
+      const tag =
+        (p.device || "").startsWith("/dev/ttyUSB") ? " [Station?]" :
+        (p.device || "").startsWith("/dev/ttyACM") ? " [Mobile?]" : "";
+      o.textContent = `${p.device} — ${desc}${tag}`;
       sel.appendChild(o);
     }
   }
-  if (!$("portCustom").value && ports[0]) {
-    $("portCustom").value = ports[0].device;
+  const preferred = defaultStationPort(ports);
+  if (prev && [...sel.options].some((o) => o.value === prev)) {
+    sel.value = prev;
+  } else if (preferred) {
+    sel.value = preferred;
   }
+  /* Do not auto-fill override — empty means "use dropdown". */
+}
+
+function selectedPort() {
+  const override = ($("portCustom").value || "").trim();
+  if (override) return override;
+  return ($("portSelect").value || "").trim();
 }
 
 async function refreshProtocols() {
@@ -91,11 +116,12 @@ async function pullState() {
 }
 
 async function connect() {
-  const port = ($("portCustom").value || $("portSelect").value || "").trim();
+  const port = selectedPort();
   if (!port) {
-    alert("Choose or enter a serial port");
+    alert("Choose a port from the list (or type an override path)");
     return;
   }
+  $("connInfo").textContent = `Connecting to ${port}…`;
   try {
     const res = await api("/api/connect", {
       method: "POST",
@@ -104,7 +130,8 @@ async function connect() {
     $("connInfo").textContent = JSON.stringify(res, null, 2);
     await pullState();
   } catch (e) {
-    alert("Connect failed: " + e.message);
+    $("connInfo").textContent = `Connect failed (${port}): ${e.message}`;
+    alert(`Connect failed (${port}): ` + e.message);
   }
 }
 
@@ -186,6 +213,9 @@ function openStream() {
 
 function bind() {
   $("btnRefreshPorts").onclick = () => refreshPorts().catch(console.error);
+  if ($("showAllPorts")) {
+    $("showAllPorts").onchange = () => refreshPorts().catch(console.error);
+  }
   $("btnConnect").onclick = () => connect();
   $("btnDisconnect").onclick = () => disconnect();
   $("btnStart").onclick = () => startSession();

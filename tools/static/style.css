@@ -55,6 +55,11 @@ label {
   font-size: 0.8rem;
   color: var(--muted);
 }
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
 input, select, button {
   font: inherit;
   border-radius: 6px;

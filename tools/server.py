@@ -111,17 +111,66 @@ def state():
     return bridge.snapshot()
 
 
+def _port_score(device: str, vid, pid) -> int:
+    """Higher = better candidate for Station/Mobile USB serial."""
+    d = device or ""
+    score = 0
+    if d.startswith("/dev/ttyUSB") or d.startswith("/dev/ttyACM"):
+        score += 100
+    if vid is not None:
+        score += 50
+    # Config A defaults: Silicon Labs CP210x Station, Espressif C3 Mobile
+    if vid == 0x10C4:  # CP210x
+        score += 20
+    if vid == 0x303A:  # Espressif
+        score += 10
+    if d.startswith("/dev/ttyS"):
+        score -= 100
+    return score
+
+
 @app.get("/api/ports")
-def ports():
-    """Best-effort list of serial ports."""
+def ports(all: bool = False):
+    """List serial ports. By default hide kernel placeholder ttyS* (n/a).
+
+    Pass ?all=1 to include everything pyserial reports.
+    """
     try:
         from serial.tools import list_ports
-        return {
-            "ports": [
-                {"device": p.device, "description": p.description or "", "hwid": p.hwid or ""}
-                for p in list_ports.comports()
+
+        raw = []
+        for p in list_ports.comports():
+            item = {
+                "device": p.device,
+                "description": (p.description or "").replace("n/a", "").strip() or "",
+                "hwid": p.hwid or "",
+                "vid": int(p.vid) if p.vid is not None else None,
+                "pid": int(p.pid) if p.pid is not None else None,
+                "manufacturer": p.manufacturer or "",
+                "score": _port_score(p.device, p.vid, p.pid),
+            }
+            raw.append(item)
+
+        if all:
+            ports_out = sorted(raw, key=lambda x: (-x["score"], x["device"]))
+        else:
+            # Prefer real USB serial; drop bare ttyS* without VID.
+            ports_out = [
+                x for x in raw
+                if x["score"] >= 50
+                or (x["vid"] is not None)
+                or x["device"].startswith("/dev/ttyUSB")
+                or x["device"].startswith("/dev/ttyACM")
             ]
-        }
+            ports_out = sorted(ports_out, key=lambda x: (-x["score"], x["device"]))
+            if not ports_out:
+                # fallback: anything that isn't ttyS*
+                ports_out = sorted(
+                    [x for x in raw if not x["device"].startswith("/dev/ttyS")],
+                    key=lambda x: x["device"],
+                )
+
+        return {"ports": ports_out, "filtered": not all, "total_raw": len(raw)}
     except Exception as e:
         return {"ports": [], "error": str(e)}
 
@@ -131,7 +180,8 @@ def connect(body: ConnectBody):
     try:
         return bridge.connect(body.port, body.baud)
     except Exception as e:
-        raise HTTPException(400, str(e)) from e
+        # FastAPI string detail is fine; include port for the UI.
+        raise HTTPException(status_code=400, detail=f"{body.port}: {e}") from e
 
 
 @app.post("/api/disconnect")

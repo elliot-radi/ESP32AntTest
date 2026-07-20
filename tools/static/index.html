@@ -19,10 +19,15 @@
         <label>Port
           <select id="portSelect"></select>
         </label>
-        <input id="portCustom" type="text" placeholder="/dev/ttyUSB0" size="16" />
         <button id="btnRefreshPorts" type="button">Refresh</button>
         <button id="btnConnect" type="button" class="primary">Connect</button>
         <button id="btnDisconnect" type="button">Disconnect</button>
+      </div>
+      <div class="row">
+        <label class="check"><input id="showAllPorts" type="checkbox" /> Show all ports (incl. ttyS*)</label>
+        <label>Override
+          <input id="portCustom" type="text" placeholder="optional path override" size="22" />
+        </label>
       </div>
       <pre id="connInfo" class="mono small">Not connected</pre>
     </section>
