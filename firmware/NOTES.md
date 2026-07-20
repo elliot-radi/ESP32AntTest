@@ -157,8 +157,16 @@ General IDF items also live in the `esp-idf-build` skill.
   (`fgetc` loop) until `\n`, then dispatch. (Intermittent — ~20% under
   rapid-fire.)
 
-### RF link (Increment 2)
+### RF link (Increment 2+) / outage + guided
 
+- **`source=MOB` outage rows** — Mobile sets `reserved[0] |= ANT_RSV0_MOB_OUTAGE`
+  (`protocol.h`) on buffered RSSI beacons; Station logs them as `LOG_SRC_MOB`
+  with empty `rssi_sta` (does not use the late-forward wire RSSI as `rssi_sta`).
+  Markers forward without the flag (just `PKT_MARKER` + step_id).
+- **Guided protocol** — Mobile `guide.c` parses full `steps[]` from
+  `PKT_PROTOCOL` JSON. Short-press = ready (marker + live view) then next
+  step; OLED shows `Step i/n` + prompt. Station stays in lockstep via live
+  beacon/`PKT_MARKER` `step_id`.
 - **`rf_init` linker clash** — ESP-PHY exports `rf_init`. Use `ant_rf_*` /
   `ant_mrf_*` prefixes (skill §8).
 - **SoftAP IP after `esp_wifi_start()`** — DHCPS stays on 192.168.4.1; set

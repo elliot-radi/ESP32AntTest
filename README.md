@@ -18,8 +18,9 @@ Two ESP32 dev boards (an ESP32-C3 and an ESP32-WROOM-32) fill the Mobile and Sta
 
 | Role | Peripherals | Power |
 |------|-------------|-------|
-| **Mobile** | 0.96" SSD1306 OLED (I2C) + tactile button | USB (power bank/charger) |
 | **Station** | None (USB-serial logging + LittleFS) | USB |
+| **Mobile** | 0.96" SSD1306 OLED (I2C) + tactile button | USB (power bank/charger) |
+
 
 ## Quick Start
 

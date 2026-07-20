@@ -96,21 +96,24 @@ bool ui_handle_button(btn_evt_t evt)
 {
     if (evt == BTN_EVT_NONE) return false;
 
-    if (s_screen == UI_SCREEN_QUICKCHECK || s_screen == UI_SCREEN_SESSION) {
+    if (s_screen == UI_SCREEN_QUICKCHECK) {
         if (evt == BTN_EVT_LONG) {
             s_screen = UI_SCREEN_MENU;
             s_menu_idx = 0;
             return true;
         }
-        if (evt == BTN_EVT_SHORT && s_screen == UI_SCREEN_SESSION) {
-            /* Advance step in guided/ad-hoc — RF emits marker. */
-            ant_mrf_advance_step();
+        return false;
+    }
+
+    if (s_screen == UI_SCREEN_SESSION) {
+        if (evt == BTN_EVT_LONG) {
+            s_screen = UI_SCREEN_MENU;
+            s_menu_idx = 0;
             return true;
         }
-        if (evt == BTN_EVT_SHORT && s_ui.guide_prompt[0] &&
-            s_screen == UI_SCREEN_GUIDE) {
-            ant_mrf_advance_step();
-            s_screen = UI_SCREEN_SESSION;
+        if (evt == BTN_EVT_SHORT) {
+            /* Advance (guided next step / ad-hoc bump). */
+            ant_mrf_on_short_press();
             return true;
         }
         return false;
@@ -118,12 +121,13 @@ bool ui_handle_button(btn_evt_t evt)
 
     if (s_screen == UI_SCREEN_GUIDE) {
         if (evt == BTN_EVT_SHORT) {
-            ant_mrf_advance_step();
-            s_screen = UI_SCREEN_SESSION;
+            /* Ready on this step → live session (or mark protocol done). */
+            ant_mrf_on_short_press();
             return true;
         }
         if (evt == BTN_EVT_LONG) {
             s_screen = UI_SCREEN_MENU;
+            s_menu_idx = 0;
             return true;
         }
         return true;
@@ -198,8 +202,18 @@ void ui_render(void)
     }
 
     if (s_screen == UI_SCREEN_GUIDE && s_ui.guide_prompt[0]) {
-        snprintf(line, sizeof(line), "Mode:%s P:%d",
-                 s_ui.mode == ANT_MODE_WIFI ? "WIFI" : "ENOW", s_ui.tx_dbm);
+        int idx = ant_mrf_step_index();
+        int nst = ant_mrf_step_count();
+        if (nst > 0 && idx >= 0) {
+            unsigned a = (unsigned)(idx + 1);
+            unsigned b = (unsigned)nst;
+            if (a > 99) a = 99;
+            if (b > 99) b = 99;
+            snprintf(line, sizeof(line), "Step %u/%u", a, b);
+        }
+        else
+            snprintf(line, sizeof(line), "Mode:%s P:%d",
+                     s_ui.mode == ANT_MODE_WIFI ? "WIFI" : "ENOW", s_ui.tx_dbm);
         oled_text_puts(0, 0, line);
         /* Word-wrap prompt into rows 2-5. */
         const char *p = s_ui.guide_prompt;

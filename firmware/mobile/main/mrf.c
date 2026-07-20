@@ -8,6 +8,7 @@
 #include "buffer.h"
 #include "ui.h"
 #include "button.h"
+#include "guide.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -46,6 +47,8 @@ static SemaphoreHandle_t  s_mu;
 static ant_mode_t s_mode = ANT_MODE_WIFI;
 static bool       s_running = false;
 static bool       s_recording = false;   /* ad-hoc or guided session */
+static bool       s_guided    = false;   /* true if host protocol loaded */
+static bool       s_step_active = false; /* true after operator pressed ready on current step */
 static int8_t     s_tx_dbm = ANT_DEFAULT_TX_POWER;
 static int8_t     s_rssi_local = -128;   /* our measurement of Station */
 static int8_t     s_rssi_peer  = -128;   /* piggybacked from Station */
@@ -59,6 +62,7 @@ static uint32_t   s_sta_ip = 0;          /* network order SoftAP IP */
 static int        s_udp_sock = -1;
 static bool       s_linked = false;
 static int64_t    s_last_rx_us = 0;
+static int64_t    s_last_good_piggy_us = 0;  /* last time Station piggyback was valid */
 
 /* AP scan / known SSID prefix */
 static char       s_ap_ssid[33] = {0};
@@ -89,7 +93,7 @@ static void drain_outage_buffer(void)
 {
     buf_entry_t e;
     int n = 0;
-    while (buffer_pop(&e) && n < 32) {
+    while (buffer_pop(&e) && n < 64) {
         ant_packet_t pkt = {0};
         pkt.magic[0] = ANT_MAGIC_0;
         pkt.magic[1] = ANT_MAGIC_1;
@@ -100,8 +104,9 @@ static void drain_outage_buffer(void)
         pkt.step_id  = e.step_id;
         pkt.rssi_local = e.rssi_mob;  /* Mobile's measurement */
         pkt.tx_power = e.tx_mob;
-        /* reserved[0]=1 marks source=MOB outage sample for Station future use */
-        pkt.reserved[0] = (e.kind == BUF_KIND_RSSI) ? 1 : 0;
+        /* reserved[0]=ANT_RSV0_MOB_OUTAGE → Station logs source=MOB (rssi_sta empty) */
+        if (e.kind == BUF_KIND_RSSI)
+            pkt.reserved[0] = ANT_RSV0_MOB_OUTAGE;
 
         uint8_t wire[sizeof(ant_packet_t)];
         ant_packet_encode(&pkt, wire);
@@ -110,6 +115,37 @@ static void drain_outage_buffer(void)
         vTaskDelay(pdMS_TO_TICKS(5));
     }
     if (n) ESP_LOGI(TAG, "forwarded %d outage entries", n);
+}
+
+/* Buffer a downlink-RSSI sample while Station can't hear our uplink. */
+static void buffer_outage_rssi(void)
+{
+    if (!s_recording) return;
+    if (s_rssi_local == (int8_t)-128) return;
+    buf_entry_t e = {
+        .kind = BUF_KIND_RSSI,
+        .seq = s_seq,
+        .step_id = s_step_id,
+        .rssi_mob = s_rssi_local,
+        .rssi_sta = -128,
+        .tx_mob = s_tx_dbm,
+        .tx_sta = 0,
+        .mode = s_mode,
+        .timestamp_ms = (uint32_t)(esp_timer_get_time() / 1000),
+    };
+    buffer_push(&e);
+}
+
+static void apply_guide_step_ui(const guide_step_t *g)
+{
+    if (!g) return;
+    s_step_id = g->step_id;
+    s_step_active = false;
+    ui_set_step(s_step_id);
+    ui_set_guide(g->prompt);
+    ui_show(UI_SCREEN_GUIDE);
+    ESP_LOGI(TAG, "guide step %u/%d: %s",
+             (unsigned)g->step_id, guide_step_count(), g->prompt);
 }
 
 static void handle_protocol_chunk(const ant_packet_t *hdr,
@@ -139,25 +175,24 @@ static void handle_protocol_chunk(const ant_packet_t *hdr,
     if (s_proto_got >= total) {
         s_proto_buf[total] = 0;
         ESP_LOGI(TAG, "protocol received (%u bytes)", total);
-        /* Extract first step prompt if present — light parse. */
-        const char *prompt = strstr(s_proto_buf, "\"prompt\"");
-        if (prompt) {
-            prompt = strchr(prompt, ':');
-            if (prompt) {
-                prompt++;
-                while (*prompt == ' ' || *prompt == '\"') prompt++;
-                char tmp[64];
-                int i = 0;
-                while (*prompt && *prompt != '\"' && i < 63) tmp[i++] = *prompt++;
-                tmp[i] = 0;
-                ui_set_guide(tmp);
-                ui_show(UI_SCREEN_GUIDE);
-            }
+
+        if (guide_load_json(s_proto_buf) == 0 && guide_begin() == 0) {
+            s_recording = true;
+            s_guided = true;
+            s_step_active = false;
+            ui_set_recording(true);
+            apply_guide_step_ui(guide_current());
+        } else {
+            ESP_LOGW(TAG, "protocol loaded but no steps — ad-hoc fallback");
+            s_recording = true;
+            s_guided = false;
+            s_step_id = 1;
+            s_step_active = true;
+            ui_set_recording(true);
+            ui_set_step(s_step_id);
+            ui_show(UI_SCREEN_SESSION);
         }
-        s_recording = true;
-        ui_set_recording(true);
-        s_step_id = 1;
-        ui_set_step(s_step_id);
+
         free(s_proto_buf);
         s_proto_buf = NULL;
         s_proto_total = s_proto_got = 0;
@@ -175,6 +210,7 @@ static void on_peer_packet(const ant_packet_t *pkt, int8_t rssi,
     }
     if (rssi != (int8_t)-128) s_rssi_local = rssi;
     if (pkt->type == PKT_BEACON) {
+        bool was_linked = s_linked;
         s_rssi_peer = pkt->rssi_local;  /* Station's view of us */
         s_last_rx_us = esp_timer_get_time();
         s_linked = true;
@@ -182,17 +218,26 @@ static void on_peer_packet(const ant_packet_t *pkt, int8_t rssi,
         ui_set_rssi(s_rssi_local, s_rssi_peer);
         ui_bump_samples();
         if (pkt->session_id) s_session_wire = pkt->session_id;
-        if (pkt->step_id && !s_recording) {
-            /* Guided session starting from Station side. */
-            s_recording = true;
-            ui_set_recording(true);
-            s_step_id = pkt->step_id;
-            ui_set_step(s_step_id);
-        } else if (pkt->step_id && s_recording) {
-            /* Stay in sync if Station advances. */
+
+        /* Asymmetric / null-floor capture (ADR-004):
+         * If Station's piggyback is valid, the uplink is fine → drain any
+         * backlog. If piggyback stays empty for >2 s of continuous downlink
+         * (we hear Station, Station is not hearing us), buffer this sample
+         * as a MOB outage row to forward later. */
+        if (s_rssi_peer != (int8_t)-128) {
+            s_last_good_piggy_us = s_last_rx_us;
+            if (s_recording && buffer_count() > 0)
+                drain_outage_buffer();
+        } else if (s_recording && s_rssi_local != (int8_t)-128) {
+            int64_t since_good = (s_last_good_piggy_us > 0)
+                ? (s_last_rx_us - s_last_good_piggy_us)
+                : (s_last_rx_us);  /* never heard a good piggyback this boot */
+            /* 2 s grace so cold-start / first beacons don't flood the buffer. */
+            if (since_good > 2000000LL)
+                buffer_outage_rssi();
+            if (!was_linked)
+                drain_outage_buffer();  /* WiFi rejoin attempt — try send */
         }
-        /* If we were disconnected, drain buffer. */
-        drain_outage_buffer();
     } else if (pkt->type == PKT_PROTOCOL) {
         const uint8_t *ext = NULL;
         int ext_len = 0;
@@ -528,28 +573,6 @@ static void beacon_task(void *arg)
     }
 }
 
-/* When we hear Station consistently but our beacons may be lost (asymmetric),
- * store MOB samples if Station piggyback stays empty for a while. Simple rule:
- * if recording and linked and Station's piggybacked rssi_local is -128, buffer. */
-static void maybe_buffer_null_floor(void)
-{
-    if (!s_recording || !s_linked) return;
-    if (s_rssi_peer != (int8_t)-128) return;  /* Station hears us */
-    if (s_rssi_local == (int8_t)-128) return;
-    buf_entry_t e = {
-        .kind = BUF_KIND_RSSI,
-        .seq = s_seq,
-        .step_id = s_step_id,
-        .rssi_mob = s_rssi_local,
-        .rssi_sta = -128,
-        .tx_mob = s_tx_dbm,
-        .tx_sta = 0,
-        .mode = s_mode,
-        .timestamp_ms = (uint32_t)(esp_timer_get_time() / 1000),
-    };
-    buffer_push(&e);
-}
-
 static void ui_task(void *arg)
 {
     const TickType_t period = pdMS_TO_TICKS(1000 / ANT_DISPLAY_HZ);
@@ -564,7 +587,7 @@ static void ui_task(void *arg)
             }
             vTaskDelay(pdMS_TO_TICKS(20));
         }
-        maybe_buffer_null_floor();
+        /* Outage sampling is driven from on_peer_packet (asymmetric uplink). */
         ui_render();
         vTaskDelay(period);
     }
@@ -654,36 +677,82 @@ int8_t ant_mrf_get_tx_power_dbm(void) { return s_tx_dbm; }
 
 void ant_mrf_start_adhoc_manual(void)
 {
+    guide_clear();
     s_recording = true;
+    s_guided = false;
+    s_step_active = true;
     s_step_id = 1;
     s_session_wire = (uint32_t)(esp_timer_get_time() / 1000000);
     ui_set_recording(true);
     ui_set_step(s_step_id);
+    ui_set_guide(NULL);
+    ui_show(UI_SCREEN_SESSION);
     ESP_LOGI(TAG, "ad-hoc manual session start step=1");
 }
 
 void ant_mrf_end_session(void)
 {
     s_recording = false;
+    s_guided = false;
+    s_step_active = false;
     s_step_id = 0;
+    guide_clear();
     ui_set_recording(false);
     ui_set_step(0);
     ui_set_guide(NULL);
+    ui_show(UI_SCREEN_QUICKCHECK);
     ESP_LOGI(TAG, "session end");
+}
+
+/* Short-press semantics:
+ *   guided + not yet "ready" on this step  → mark ready, show live SESSION
+ *   guided + ready                        → advance to next step (or done)
+ *   ad-hoc                                → bump run counter + PKT_MARKER
+ */
+bool ant_mrf_on_short_press(void)
+{
+    if (!s_recording) return false;
+
+    if (s_guided) {
+        if (!s_step_active) {
+            /* Ready on current step — switch to live RSSI for sampling. */
+            s_step_active = true;
+            ui_show(UI_SCREEN_SESSION);
+            /* Marker announces the step is now the active sample window. */
+            send_marker_now();
+            ESP_LOGI(TAG, "step %u ready", (unsigned)s_step_id);
+            return true;
+        }
+        /* Advance to next guided step. */
+        const guide_step_t *next = guide_advance();
+        if (!next) {
+            ESP_LOGI(TAG, "protocol complete");
+            ui_set_guide("DONE - long=end");
+            ui_show(UI_SCREEN_GUIDE);
+            s_step_active = false;
+            /* Leave recording on until operator ends; Station keeps logging. */
+            return true;
+        }
+        apply_guide_step_ui(next);
+        return true;
+    }
+
+    /* Ad-hoc: bump run counter + marker. */
+    s_step_id++;
+    ui_set_step(s_step_id);
+    send_marker_now();
+    ESP_LOGI(TAG, "ad-hoc advance -> step %u", s_step_id);
+    return true;
 }
 
 void ant_mrf_advance_step(void)
 {
-    if (!s_recording) {
-        /* Not in session: ignore (or could start ad-hoc). */
-        return;
-    }
-    s_step_id++;
-    ui_set_step(s_step_id);
-    send_marker_now();
-    ESP_LOGI(TAG, "advance -> step %u", s_step_id);
+    (void)ant_mrf_on_short_press();
 }
 
 bool ant_mrf_is_linked(void) { return s_linked; }
 bool ant_mrf_is_recording(void) { return s_recording; }
+bool ant_mrf_is_guided(void) { return s_guided; }
 uint16_t ant_mrf_step_id(void) { return s_step_id; }
+int ant_mrf_step_index(void) { return guide_cursor(); }
+int ant_mrf_step_count(void) { return guide_step_count(); }

@@ -108,31 +108,28 @@ static void note_rx_now(void)
 
 /* ---- log a decoded Mobile beacon (Station RX) ---- */
 
-static void log_beacon_sta(const ant_packet_t *pkt, int8_t rssi_sta)
+static void log_beacon_row(const ant_packet_t *pkt, int8_t rssi_sta, bool mob_outage)
 {
     if (!s_logging) return;
     const station_session_t *s = session_get();
     if (!s) return;
 
+    /* MOB outage replay: rssi_mob is what Mobile measured during the outage;
+     * rssi_sta is empty (we never decoded the uplink at the time — SPEC §4).
+     * Do NOT use the wire RSSI of the late forward as rssi_sta. */
     log_row_t row = {
         .session_id   = s->session_id,
         .step_id      = pkt->step_id ? pkt->step_id : s->step_id,
         .seq          = pkt->seq,
         .timestamp_ms = (uint64_t)(esp_timer_get_time() / 1000),
         .mode         = s->mode,
-        .tx_mob       = pkt->tx_power,          /* peer reported */
+        .tx_mob       = pkt->tx_power,
         .tx_sta       = ant_rf_get_tx_power_dbm(),
-        .rssi_mob     = pkt->rssi_local,         /* piggybacked (Mobile's view) */
-        .rssi_sta     = rssi_sta,                /* measured here */
-        .source       = LOG_SRC_STA,
+        .rssi_mob     = pkt->rssi_local,
+        .rssi_sta     = mob_outage ? (int8_t)-128 : rssi_sta,
+        .source       = mob_outage ? LOG_SRC_MOB : LOG_SRC_STA,
         .status       = LOG_STATUS_OK,
     };
-    /* Empty piggyback when Mobile hasn't heard us yet (sentinel -128). */
-    if (row.rssi_mob == (int8_t)-128) {
-        /* logger uses -128 as empty for either direction via source —
-         * for STA rows both may be present; keep the sentinel so fmt
-         * can emit empty if we ever extend. For now leave it. */
-    }
     logger_emit_row(&row);
 }
 
@@ -152,12 +149,24 @@ static void handle_peer_packet(const ant_packet_t *pkt, int8_t rssi,
     unlock();
 
     switch (pkt->type) {
-    case PKT_BEACON:
-        log_beacon_sta(pkt, rssi);
+    case PKT_BEACON: {
+        bool mob = (pkt->reserved[0] & ANT_RSV0_MOB_OUTAGE) != 0;
+        log_beacon_row(pkt, rssi, mob);
+        if (mob) {
+            /* Late drain of outage backlog — surface as a control nudge so the
+             * host can note gap-fill (SERIAL_PROTOCOL.md §4.2 mob_rejoined is
+             * for the link event; individual rows ride the > channel). */
+            ESP_LOGI(TAG, "MOB outage row seq=%u step=%u rssi_mob=%d",
+                     (unsigned)pkt->seq, pkt->step_id, (int)pkt->rssi_local);
+        } else if (pkt->step_id) {
+            /* Stay in lockstep with Mobile's active step on live beacons. */
+            session_set_step(pkt->step_id);
+        }
         break;
+    }
 
     case PKT_MARKER: {
-        /* Button-press / step advance from Mobile. */
+        /* Button-press / step advance from Mobile (live or post-outage). */
         session_set_step(pkt->step_id);
         cJSON *j = cJSON_CreateObject();
         cJSON_AddStringToObject(j, "evt", "marker");

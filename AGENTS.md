@@ -69,12 +69,14 @@ refs/                      # datasheets + pinout images (read-only reference)
 **Implementation status (2026-07-20):** Shared packet encode/decode + host-C
 tests done. Station: serial protocol (`#`/`$`/`>`), session + wall-clock,
 LittleFS, SoftAP + UDP beacons @ 5 Hz, promiscuous RSSI, session `>` logging,
-`PKT_PROTOCOL` forward — **verified on WROOM HW**. Mobile: STA join
+`PKT_PROTOCOL` forward, **`source=MOB` outage-row merge** via
+`ANT_RSV0_MOB_OUTAGE` — verified on WROOM HW. Mobile: STA join
 `AntTest-*`, beacons, OLED Quick-Check/menu, button gestures, RAM outage
-buffer — **board-to-board dual-RSSI rows verified** (Config A: C3 Mobile +
-WROOM Station). `hwtest/` still valid as a minimal OLED/button sketch.
-Remaining: guided multi-step protocol UI polish, Station `source=MOB` outage
-row merge, ESP-NOW path HW check, then `tools/server.py`.
+buffer + forward, **guided multi-step protocol** (`guide.c` parses full
+`steps[]`, short-press ready/advance) — board-to-board dual-RSSI verified;
+guided path built, HW re-flash of Mobile pending when C3 reappears.
+`hwtest/` still valid as a minimal OLED/button sketch. Remaining: ESP-NOW
+path HW check, ad-hoc Auto, then `tools/server.py`.
 
 ## Key decisions (pointers, not re-statements)
 
@@ -179,11 +181,10 @@ battery/RTC hardware, sleep modes, multi-axis orientation. See [SPEC §1](docs/S
 
 ## Current next step
 
-1. Guided multi-step protocol on Mobile (full step list / prompts from
-   `PKT_PROTOCOL` JSON; markers advance `step_id` end-to-end).
-2. Station: log `source=MOB` rows from Mobile outage forward; polish edge
-   cases (link_loss, session end while out of range).
-3. ESP-NOW mode path — code present on both sides; HW verify.
+1. Re-flash Mobile when `/dev/ttyACM*` is back; HW-verify guided step walk +
+   MOB outage rows (`source=MOB` in `>` stream after a deliberate range gap).
+2. ESP-NOW mode path — code present on both sides; HW verify.
+3. Ad-hoc Auto (time-soak) on Mobile.
 4. `tools/server.py` — FastAPI + serial bridge + `analyze.py` plots.
 
 Update the "Implementation status" line above and this list as work lands.

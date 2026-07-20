@@ -24,6 +24,10 @@ typedef enum {
     ANT_MODE_ESPNOW = 0x02,
 } ant_mode_t;
 
+/* reserved[0] flags (beacon path). Survives Mobile outage forward so Station
+ * can log source=MOB rows without mistaking a late replay for a live STA RX. */
+#define ANT_RSV0_MOB_OUTAGE  0x01u  /* Mobile-buffered RSSI (uplink outage); rssi_sta empty */
+
 typedef struct __attribute__((packed)) {
     uint8_t  magic[2];      // ANT_MAGIC_0, ANT_MAGIC_1
     uint8_t  version;       // ANT_PROTO_VER
@@ -33,7 +37,7 @@ typedef struct __attribute__((packed)) {
     uint16_t step_id;      // active protocol step (run); ad-hoc: incrementing run counter
     int8_t   rssi_local;    // RSSI measured locally by sender (of peer's last beacon) — piggyback
     int8_t   tx_power;      // sender's current TX power in dBm
-    uint8_t  reserved[4];
+    uint8_t  reserved[4];   // [0]=ANT_RSV0_* flags on beacons / outage forward
 } ant_packet_t;             // 20 bytes (LE wire format; see protocol.c)
 
 // Validate and decode a received buffer into ant_packet_t
