@@ -27,13 +27,23 @@ enough — **no ESP-IDF / build VM** required to operate.
 ```bash
 # detach Station from libvirt passthrough if the guest was owning USB
 cd /path/to/ESP32AntTest
+./tools/antTestServe.sh            # foreground; Ctrl+C to stop
+# or: ./tools/antTestServe.sh --background   (opens a browser, logs to /tmp)
+```
+
+The script anchors to repo root, (re)creates `.venv`, refreshes deps only
+when `tools/requirements.txt` changes, and starts the server on
+`http://127.0.0.1:8000/` (override port with `ANT_TEST_PORT=8080`).
+
+Manual equivalent:
+```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r tools/requirements.txt
 python tools/server.py --port 8000   # binds 0.0.0.0 by default
-# browser: http://127.0.0.1:8000/
-# Connect → Station port (ttyUSB0 Config A) → protocol → Start session
-# Mobile: Quick-Check, join SoftAP, short-press guided steps
 ```
+
+Then: **Connect → Station port (`ttyUSB0` Config A) → protocol → Start session**.
+Mobile: Quick-Check join SoftAP, then short-press guided steps.
 
 Only **one** process may own Station's serial port. If `hello` times out,
 stop leftover `server.py` / `idf monitor` / `screen`.

@@ -55,10 +55,8 @@ dev VM). See [docs/SPEC.md](docs/SPEC.md#build), [docs/DEVENV.md](docs/DEVENV.md
 be the build VM — shared project tree is enough):
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r tools/requirements.txt
-python tools/server.py --port 8000
-# browser → Connect /dev/ttyUSB0 → pick protocol → Start session
+./tools/antTestServe.sh            # foreground; Ctrl+C to stop
+# or: ./tools/antTestServe.sh --background
 ```
 
 Details: [tools/README.md](tools/README.md). Plots: `tools/analyze.py` on
